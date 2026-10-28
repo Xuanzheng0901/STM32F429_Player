@@ -266,4 +266,10 @@ SECTIONS
     libgcc.a:* ( * )
   }
 
+    .freertos_heap (NOLOAD):
+    {
+      . = ALIGN(8);
+      *(.freertos_heap)
+      . = ALIGN(8);
+    } >CCMRAM
 }
