@@ -78,15 +78,24 @@ if(lvgl_port_lock(portMAX_DELAY))
 
 日志使用 USART1，PA9 / PA10，115200、8N1；TX DMA 为 DMA2 Stream7 / Channel4。`log_init()` 创建优先级 12、栈深 256 words（1024 B）的发送任务和两个指针队列。16 个静态日志块共 4096 B，存放于普通 SRAM；每条最多发送 253 B，包含颜色复位和换行。生产任务以零等待方式入队，内存池用完时跳过本条日志。
 
-## 编码器输入
+## 编码器输入与临时按键
 
-TIM3_CH1 / CH2 为 PB4 / PB5，TI12 模式，16 位计数器。驱动每 5 ms 采样一次，按 4 个硬件计数换算一个机械档位，以有符号差值处理 `0 / 65535` 回绕，软件位置支持正反方向计数。
+当前 lv_port_encoder.h 中 LV_PORT_ENCODER_SIDE_KEYS=1，侧边下/中/上三键临时代替编码器。此模式不创建 TIM3 旋钮、PB3 按键及它们的扫描定时器；一个 10 ms FreeRTOS 定时器扫描全部八键，连续三次采样消抖，长按只触发一次。旋转增量与按键事件由 LVGL 编码器输入接口消费，沿用原有列表浏览/确认逻辑。
 
-旋钮按键为 PB3，`KNOB_BUTTON`，低电平有效。按键扫描周期为 10 ms，连续 3 次采样消抖；默认单击判定时间为 400 ms，长按时间为 700 ms。
+| 按键 | 引脚 | 功能 |
+| --- | --- | --- |
+| SIDE1，下 | PD10 | 向下浏览，编码器 +1 |
+| SIDE2，中 | PD11 | 确认，编码器按下/释放 |
+| SIDE3，上 | PD12 | 向上浏览，编码器 -1 |
+| UP1，最右 | PD13 | 列表 |
+| UP2 | PD14 | 下一首 |
+| UP3，中 | PD15 | 播放/暂停 |
+| UP4 | PC6 | 上一首 |
+| UP5，最左 | PC7 | 模式切换 |
 
-应用通过 `iot_button_create_gpio()` 创建按键，将 `knob_config_t.htim` 设置为 `&htim3`，然后调用 `lvgl_port_add_encoder()`。配置中的 `disp` 使用 `lv_display_get_default()`，`encoder_enter` 使用按键句柄。返回的输入设备通过 `lv_indev_set_group()` 绑定到界面 group。
+所有按键低电平有效。上方五键按屏幕位置对应，按下时投递 UI 左到右的控件编号 4/3/2/1/0；确认按下/释放与上方按钮共用长度为 8 的字节队列，旋转方向累加保存。FreeRTOS 扫描回调不操作 UI，LVGL 读取输入时再调用 config.control_click，UI 将其转成既有控件的 LV_EVENT_CLICKED。
 
-LVGL 编码器读取周期为 10 ms。旋转回调累计档位差值，按键回调将按下和释放边沿写入长度为 8 的队列；显示刷新完成后由 LVGL 读取。删除编码器使用 `lvgl_port_remove_encoder()`，按键句柄由应用调用 `iot_button_delete()` 释放。
+将 LV_PORT_ENCODER_SIDE_KEYS 改为 0，可恢复 TIM3 PB4/PB5 与 PB3 编码器按键；上方五键继续可用。真实旋钮仍按 5 ms 周期、每档 4 计数、有符号 16 位差值处理回绕。返回的输入设备通过 lv_indev_set_group 绑定界面 group，删除使用 lvgl_port_remove_encoder；外部创建的 PB3 按键仍由调用者释放。
 
 ## 构建与测试
 

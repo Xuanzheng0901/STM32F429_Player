@@ -29,6 +29,7 @@ static lv_obj_t *title_label, *artist_label, *album_label, *status_label, *index
 static lv_obj_t *format_label, *audio_label;
 static lv_obj_t *elapsed_label, *duration_label, *progress_fill, *progress_knob;
 static lv_obj_t *play_icon, *repeat_label;
+static lv_obj_t *control_buttons[5];
 static uint32_t current_track;
 static uint32_t elapsed;
 static bool playing;
@@ -330,13 +331,23 @@ static void ui_action(lv_event_t *event)
     }
     ui_update();
 }
+static void ui_control_click(unsigned index)
+{
+    lv_obj_send_event(control_buttons[index], LV_EVENT_CLICKED, NULL);
+}
+
 static void ui_encoder_init(lv_group_t *group)
 {
+    button_handle_t button = NULL;
+#if LV_PORT_ENCODER_SIDE_KEYS
+    const lvgl_port_encoder_cfg_t config = {
+        .disp = lv_display_get_default(), .control_click = ui_control_click,
+    };
+#else
     const button_config_t button_config = {0};
     const button_gpio_config_t gpio = {
         .port = KNOB_BUTTON_GPIO_Port, .pin = KNOB_BUTTON_Pin, .active_level = 0,
     };
-    button_handle_t button;
     if(iot_button_create_gpio(&button_config, &gpio, &button) != 0)
     {
         LOGE("ENCODER", "Button initialization failed");
@@ -345,13 +356,15 @@ static void ui_encoder_init(lv_group_t *group)
     const knob_config_t knob = {.htim = &htim3, .default_direction = 0};
     const lvgl_port_encoder_cfg_t config = {
         .disp = lv_display_get_default(), .encoder_a_b = &knob, .encoder_enter = button,
+        .control_click = ui_control_click,
     };
+#endif
     lv_indev_t *indev = lvgl_port_add_encoder(&config);
     if(indev)
         lv_indev_set_group(indev, group);
     else
     {
-        iot_button_delete(button);
+        if(button) iot_button_delete(button);
         LOGE("ENCODER", "Input initialization failed");
     }
 }
@@ -413,6 +426,7 @@ void UI_init(void)
     {
         const int32_t x = i == 2 ? 231 : 144 + (int32_t)i * 46;
         lv_obj_t *control = ui_image(screen, controls[i], x, i == 2 ? 6 : 11);
+        control_buttons[i] = control;
         if(i == 2) play_icon = control;
         lv_obj_add_flag(control, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(control, ui_action, LV_EVENT_CLICKED, (void *)i);

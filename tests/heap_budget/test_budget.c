@@ -25,8 +25,7 @@ int main(void)
     for(unsigned i = 0; i < 5; ++i) allocate(80); /* 显示 3 个锁、LVGL 2 个锁。 */
     task(16 * 1024);        /* LVGL 内部 swdraw，不能漏计。 */
     task(4 * 1024);         /* LVGL 管理任务 */
-    allocate(44);
-    allocate(44);          /* 按键、编码器软件定时器 */
+    allocate(44);          /* 临时侧键与上方五键共用的扫描定时器 */
     allocate(80 + 8);      /* 编码器按键队列 */
     allocate(80 + 12);
     allocate(80 + 1180);

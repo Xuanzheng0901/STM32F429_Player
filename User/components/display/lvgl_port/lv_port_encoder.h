@@ -11,11 +11,17 @@
 #include "lv_port_knob.h"
 #include "lv_port_button.h"
 
+/* 暂无焊接编码器：侧键下/中/上代替下一项/确认/上一项。改为 0 恢复 TIM3/PB3。 */
+#ifndef LV_PORT_ENCODER_SIDE_KEYS
+#define LV_PORT_ENCODER_SIDE_KEYS 1
+#endif
+
 // LVGL 旋钮和按键的配置
 typedef struct {
     lv_disp_t *disp; // LVGL 显示设备句柄
     const knob_config_t *encoder_a_b; // 旋钮配置
     button_handle_t encoder_enter; // 按键句柄 (外部创建并传入)
+    void (*control_click)(unsigned index); /* 上方五键，回调在 LVGL 读取输入时执行。 */
 } lvgl_port_encoder_cfg_t;
 
 

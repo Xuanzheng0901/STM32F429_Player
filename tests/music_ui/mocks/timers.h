@@ -5,3 +5,5 @@ TimerHandle_t xTimerCreate(const char *, unsigned, int, void *, TimerCallbackFun
 int xTimerStart(TimerHandle_t, unsigned);
 int xTimerStop(TimerHandle_t, unsigned);
 int xTimerDelete(TimerHandle_t, unsigned);
+
+void *pvTimerGetTimerID(TimerHandle_t);

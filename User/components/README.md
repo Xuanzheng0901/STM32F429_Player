@@ -1,6 +1,6 @@
 # F429 播放器应用
 
-从 F407 迁移的应用已经接入 StartDefaultTask → app_main，当前固定使用 SSD1685、TIM3 编码器、I2S2 和 ES9018K2M。F407 工程保持原状。
+从 F407 迁移的应用已经接入 StartDefaultTask → app_main，当前固定使用 SSD1685、TIM3 编码器（当前侧键临时代替）、I2S2 和 ES9018K2M。F407 工程保持原状。
 
 | 组件 | 职责 |
 | --- | --- |
@@ -34,8 +34,8 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 147,360 B | 24+40 KiB | 596,864 B |
-| Release | 147,360 B | 24+40 KiB | 535,828 B |
+| Debug | 147,368 B | 24+40 KiB | 592,992 B |
+| Release | 147,360 B | 24+40 KiB | 534,060 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
@@ -52,3 +52,5 @@ UI 对插拔 SD 卡、USB 主机连接/断开、耳机插拔依次显示三秒�
 模块边界：UI → player → audio/playback → audio_player → decoder/file_decoder → FatFs；USB 直接向 audio/usb_audio 写 PCM。解码层不依赖音频硬件，player 不直接接触 DMA 或播放中的 FIL。
 
 播放完成由 player_callbacks_t.finished 通知，player 负责列表环绕、单曲循环和整轮不重复洗牌；UI 循环按钮以 L/1/R 表示三种模式。播放策略不再放在音频任务内。
+
+上方五键按物理位置对应 UI 按钮：UP1～5 为列表、下一首、播放/暂停、上一首、模式。侧边 SIDE1（下）/SIDE2（中）/SIDE3（上）为向下浏览/确认/向上浏览。编码器驱动中的 LV_PORT_ENCODER_SIDE_KEYS 开关可恢复 TIM3/PB3，详见 [输入说明](display/README.md)。

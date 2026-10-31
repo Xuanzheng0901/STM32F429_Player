@@ -25,6 +25,7 @@ static player_mode_t requested_mode;
 static music_window_t window;
 static uint8_t frame[DISP_BUF_SIZE];
 static lv_indev_t *test_encoder;
+static void (*test_control_click)(unsigned);
 static int32_t encoder_delta;
 static bool encoder_pressed;
 /* 歌曲信息现在位于右侧；只比较底栏上方 x=136..359 的整字节区域。 */
@@ -58,6 +59,8 @@ static void read_encoder(lv_indev_t *encoder, lv_indev_data_t *data)
 }
 lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *config)
 {
+    test_control_click = config->control_click;
+    assert(test_control_click);
     lv_indev_t *encoder = lv_indev_create();
     lv_indev_set_type(encoder, LV_INDEV_TYPE_ENCODER);
     lv_indev_set_display(encoder, config->disp);
@@ -411,6 +414,12 @@ int main(int argc, char **argv)
     (void)requested_repeat;
     lv_refr_now(NULL);
     check_bounds(lv_screen_active());
+    unsigned before_top_toggle = toggles;
+    test_control_click(2); assert(toggles == before_top_toggle + 1);
+    test_control_click(1); assert(pending && request_select && request_index == 0); pending = false;
+    test_control_click(3); assert(pending && request_select && request_index == 0); pending = false;
+    test_control_click(4); assert(lv_group_get_focused(player_group) == track_rows[2]);
+    test_control_click(0); assert(requested_mode == PLAYER_REPEAT_ONE);
     puts("PASS: fixed center, boundaries, rapid asynchronous navigation and confirmation; browsing preserves player; scrolling and highlight edges intact");
     return 0;
 }
