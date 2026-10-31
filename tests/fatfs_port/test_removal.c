@@ -6,6 +6,17 @@
 #include <string.h>
 #include "../../User/components/player/player.c"
 
+
+void audio_output_init(void) {}
+int audio_output_poll(void) { return -1; }
+void audio_output_set_active(bool active) { (void)active; }
+bool usb_audio_connected(void) { return false; }
+bool usb_audio_start(void) { return true; }
+void usb_audio_stop(void) {}
+void usb_audio_poll(uint32_t timeout) { (void)timeout; }
+bool usb_audio_running(void) { return false; }
+bool usb_audio_audible(void) { return false; }
+
 static jmp_buf audio_exit, music_exit;
 static unsigned windows, absent, starts, closes;
 static bool file_open, removed, paused_case, quick_case;
@@ -114,7 +125,7 @@ int main(int argc, char **argv)
     s_status = xQueueCreate(1, sizeof(audio_status_t));
     s_stop_ack = xQueueCreate(1, sizeof(bool));
     s_audio_task = (void *)1;
-    s_callbacks = (player_callbacks_t){window_changed, playback_changed, failed, observed_media};
+    s_callbacks = (player_callbacks_t){.window = window_changed, .playback = playback_changed, .error = failed, .media = observed_media};
     mock_present = 0;
     mock_wait_hook = schedule;
     if(setjmp(music_exit) == 0) music_task(NULL);

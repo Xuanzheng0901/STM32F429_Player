@@ -4,6 +4,11 @@
 #include "music.h"
 
 typedef enum { PLAYER_NO_CARD, PLAYER_SCANNING } player_media_t;
+typedef enum {
+    PLAYER_CARD_INSERTED, PLAYER_CARD_REMOVED,
+    PLAYER_USB_CONNECTED, PLAYER_USB_DISCONNECTED,
+    PLAYER_EAR_INSERTED, PLAYER_EAR_REMOVED
+} player_notice_t;
 
 /* 在曲库任务中同步通知，接收方复制数据、处理界面锁。
  * 接口可留空用于无界面播放，音频补数任务不调用这些接口。
@@ -13,6 +18,8 @@ typedef struct {
     bool (*playback)(uint32_t index, const music_info_t *info, uint32_t elapsed, bool playing);
     bool (*error)(void);
     void (*media)(player_media_t state);
+    void (*notice)(player_notice_t notice);
+    void (*usb)(bool connected, bool playing);
 } player_callbacks_t;
 
 /* UI、I2S 和 DAC 初始化后调用一次，复制通知接口并创建后台任务。 */

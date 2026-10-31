@@ -4,7 +4,7 @@ enable_testing()
 get_filename_component(REPO "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(PLAYER "${REPO}/User/components/player")
 set(FATFS "${REPO}/User/components/fatfs")
-add_library(audio STATIC "${PLAYER}/audio_player.c" "${PLAYER}/audio_i2s.c"
+add_library(audio STATIC "${PLAYER}/audio_player.c" "${PLAYER}/audio_i2s.c" "${PLAYER}/audio_dma.c"
     "${PLAYER}/mp3_decoder.c" "${PLAYER}/flac_decoder.c" "${PLAYER}/decoder_memory.c"
     "${FATFS}/ff.c" "${FATFS}/ffunicode.c")
 target_include_directories(audio PUBLIC mocks "${PLAYER}" "${FATFS}")

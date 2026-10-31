@@ -32,6 +32,14 @@ static lv_obj_t *play_icon, *repeat_label;
 static uint32_t current_track;
 static uint32_t elapsed;
 static bool playing;
+static bool usb_mode, usb_playing;
+static lv_obj_t *notice_box, *notice_label;
+static lv_timer_t *notice_timer;
+static player_notice_t notices[8];
+static unsigned notice_read, notice_write;
+static const char *const notice_text[] = {
+    "SD卡已插入", "SD卡已拔出", "USB已连接", "USB已断开", "耳机已插入", "耳机已拔出"
+};
 static bool repeat_one;
 static lv_style_t block_style;
 
@@ -92,7 +100,7 @@ static void ui_time(lv_obj_t *label, uint32_t seconds)
 static void ui_update_markers(void)
 {
     for(uint32_t i = 0; i < PLAYER_TRACK_COUNT; i++) {
-        const char *marker = total_tracks && list_first + i == current_track ? (playing ? ">" : "=") : "";
+        const char *marker = total_tracks && list_first + i == current_track ? (playing && !usb_mode ? ">" : "=") : "";
         if(strcmp(lv_label_get_text(track_markers[i]), marker))
             lv_label_set_text_static(track_markers[i], marker);
     }
@@ -100,17 +108,17 @@ static void ui_update_markers(void)
 
 static void ui_update(void)
 {
-    lv_label_set_text_static(title_label, total_tracks ? current_info.title :
+    lv_label_set_text_static(title_label, usb_mode ? "USB Audio" : total_tracks ? current_info.title :
                             library_error ? "加载失败" : library_ready ? "未找到音乐" :
                             media_state == PLAYER_NO_CARD ? "未插卡" : "扫描中");
-    lv_label_set_text_static(artist_label, current_info.artist);
-    lv_label_set_text_static(album_label, current_info.album);
+    lv_label_set_text_static(artist_label, usb_mode ? "USB 音频模式" : current_info.artist);
+    lv_label_set_text_static(album_label, usb_mode ? "" : current_info.album);
     const char *format = current_info.type == MUSIC_WAV ? "WAV" :
                          current_info.type == MUSIC_MP3 ? "MP3" :
                          current_info.type == MUSIC_FLAC ? "FLAC" : "--";
-    lv_label_set_text_static(format_label, format);
-    const uint32_t rate = current_info.sample_rate_hz;
-    const unsigned bits = current_info.bits_per_sample;
+    lv_label_set_text_static(format_label, usb_mode ? "USB" : format);
+    const uint32_t rate = usb_mode ? 48000U : current_info.sample_rate_hz;
+    const unsigned bits = usb_mode ? 16U : current_info.bits_per_sample;
     if(rate == 0 || bits == 0)
         lv_label_set_text_static(audio_label, "--");
     else if(rate % 1000 / 100)
@@ -118,20 +126,20 @@ static void ui_update(void)
                               (unsigned long)(rate % 1000 / 100), bits);
     else
         lv_label_set_text_fmt(audio_label, "%luk/%ub", (unsigned long)(rate / 1000), bits);
-    lv_label_set_text_static(status_label, library_error ? "加载失败" :
+    lv_label_set_text_static(status_label, usb_mode ? (usb_playing ? "USB播放" : "USB等待") : library_error ? "加载失败" :
                             !library_ready ? (media_state == PLAYER_NO_CARD ? "未插卡" : "扫描中") : !total_tracks ? "无音乐" :
                             playing ? "正在播放" : "已暂停");
     lv_label_set_text_fmt(index_label, "%lu / %lu", total_tracks ? (unsigned long)current_track + 1 : 0,
                           (unsigned long)total_tracks);
-    const uint32_t duration = current_info.duration_seconds;
+    const uint32_t duration = usb_mode ? 0 : current_info.duration_seconds;
     if(duration && elapsed > duration) elapsed = duration;
-    ui_time(elapsed_label, elapsed);
+    ui_time(elapsed_label, usb_mode ? 0 : elapsed);
     ui_time(duration_label, duration);
     const int32_t x = PLAYER_PROGRESS_X + (duration ?
         (int32_t)(((uint64_t)(PLAYER_PROGRESS_WIDTH - 1) * elapsed + duration / 2) / duration) : 0);
     lv_obj_set_width(progress_fill, x - PLAYER_PROGRESS_X + 1);
     lv_obj_set_x(progress_knob, x - 2);
-    lv_image_set_src(play_icon, playing ? &music_player_pause : &music_player_play);
+    lv_image_set_src(play_icon, (usb_mode ? usb_playing : playing) ? &music_player_pause : &music_player_play);
     if(repeat_one) lv_obj_remove_flag(repeat_label, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(repeat_label, LV_OBJ_FLAG_HIDDEN);
     ui_update_markers();
@@ -241,11 +249,46 @@ void UI_set_media_state(player_media_t state)
     lvgl_port_unlock();
 }
 
+static void notice_next(lv_timer_t *timer)
+{
+    ++notice_read;
+    if(notice_read == notice_write) {
+        lv_obj_add_flag(notice_box, LV_OBJ_FLAG_HIDDEN);
+        lv_timer_pause(timer);
+        return;
+    }
+    lv_label_set_text_static(notice_label, notice_text[notices[notice_read % 8U]]);
+}
+
+void UI_show_notice(player_notice_t notice)
+{
+    lvgl_port_lock(portMAX_DELAY);
+    bool empty = notice_read == notice_write;
+    if(notice_write - notice_read == 8U) ++notice_read;
+    notices[notice_write++ % 8U] = notice;
+    if(empty) {
+        lv_label_set_text_static(notice_label, notice_text[notice]);
+        lv_obj_remove_flag(notice_box, LV_OBJ_FLAG_HIDDEN);
+        lv_timer_reset(notice_timer);
+        lv_timer_resume(notice_timer);
+    }
+    lvgl_port_unlock();
+}
+
+void UI_set_usb_status(bool connected, bool active)
+{
+    lvgl_port_lock(portMAX_DELAY);
+    usb_mode = connected;
+    usb_playing = active;
+    ui_update();
+    lvgl_port_unlock();
+}
+
 static void ui_action(lv_event_t *event)
 {
     const uintptr_t action = (uintptr_t)lv_event_get_user_data(event);
     lv_event_code_t code = lv_event_get_code(event);
-    if(!total_tracks) return;
+    if(usb_mode || !total_tracks) return;
     if(code == LV_EVENT_KEY) {
         uint32_t index = list_focus;
         uint32_t key = lv_event_get_key(event);
@@ -406,6 +449,16 @@ void UI_init(void)
         }
         lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
     }
+    /* 复用弹窗对象和 LVGL 定时器，连续事件依次显示三秒。 */
+    notice_box = ui_block(lv_layer_top(), 60, 66, 240, 52, true);
+    lv_obj_set_style_border_width(notice_box, 2, 0);
+    lv_obj_set_style_border_color(notice_box, lv_color_black(), 0);
+    lv_obj_set_style_text_font(notice_box, small, 0);
+    lv_obj_set_style_text_color(notice_box, lv_color_black(), 0);
+    notice_label = ui_label(notice_box, "", small, 2, 2, 232, 44, LV_TEXT_ALIGN_CENTER, false);
+    lv_obj_add_flag(notice_box, LV_OBJ_FLAG_HIDDEN);
+    notice_timer = lv_timer_create(notice_next, 3000, NULL);
+    lv_timer_pause(notice_timer);
     lv_group_set_editing(player_group, true);
     current_info.type = MUSIC_UNKNOWN;
     ui_encoder_init(player_group);

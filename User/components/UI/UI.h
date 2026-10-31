@@ -23,5 +23,7 @@ bool UI_set_player_status(uint32_t index, const music_info_t *info,
 bool UI_set_music_error(void);
 
 void UI_set_media_state(player_media_t state);
+void UI_show_notice(player_notice_t notice);
+void UI_set_usb_status(bool connected, bool playing);
 
 #endif

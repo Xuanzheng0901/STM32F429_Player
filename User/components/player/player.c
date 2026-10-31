@@ -5,6 +5,8 @@
 #include "task.h"
 #include "log.h"
 #include "audio_player.h"
+#include "audio_output.h"
+#include "usb_audio.h"
 
 #define MUSIC_STACK_WORDS 4096U
 
@@ -38,6 +40,18 @@ static QueueHandle_t s_commands, s_status;
 static TaskHandle_t s_audio_task;
 static QueueHandle_t s_stop_ack;
 static volatile bool s_available;
+static volatile bool s_usb_mode, s_usb_playing;
+static player_notice_t s_notices[8];
+static unsigned s_notice_read, s_notice_write;
+
+/* 音频任务只投递事件，LVGL 锁和墨水屏刷新由曲库任务承担。 */
+static void post_notice(player_notice_t notice)
+{
+    taskENTER_CRITICAL();
+    if(s_notice_write - s_notice_read == 8U) ++s_notice_read;
+    s_notices[s_notice_write++ % 8U] = notice;
+    taskEXIT_CRITICAL();
+}
 
 static void audio_select(uint32_t index, const music_info_t *info, bool autoplay)
 {
@@ -62,10 +76,24 @@ static void audio_task(void *argument)
     bool selected = false, repeat = false;
     uint32_t last_elapsed = UINT32_MAX;
     audio_state_t last_state = AUDIO_STOPPED;
+    audio_output_init();
     while(1) {
-        audio_player_poll(0);
+        bool connected = usb_audio_connected();
+        if(connected != s_usb_mode) {
+            audio_output_set_active(false);
+            audio_player_stop();
+            usb_audio_stop();
+            selected = false;
+            s_usb_mode = connected;
+            s_usb_playing = false;
+            post_notice(connected ? PLAYER_USB_CONNECTED : PLAYER_USB_DISCONNECTED);
+        }
+        int ear = audio_output_poll();
+        if(ear >= 0) post_notice(ear ? PLAYER_EAR_INSERTED : PLAYER_EAR_REMOVED);
+        if(!s_usb_mode) audio_player_poll(0);
         /* 拔卡立即停止；即使暂停，也会周期读取卡状态。 */
         if(selected && sdcard_is_removed()) {
+            audio_output_set_active(false);
             audio_player_stop();
             selected = false;
         }
@@ -73,15 +101,19 @@ static void audio_task(void *argument)
         /* 合并控制命令，浏览不接触正在播放的曲目副本。 */
         if(xQueueReceive(s_commands, &command, 0) == pdTRUE) {
             if(command.stop) {
-                audio_player_stop();
+                if(!s_usb_mode) {
+                    audio_output_set_active(false);
+                    audio_player_stop();
+                }
                 selected = false;
                 bool stopped = true;
                 xQueueOverwrite(s_stop_ack, &stopped);
                 continue;
             }
-            if(sdcard_is_removed()) continue;
+            if(s_usb_mode || sdcard_is_removed()) goto output;
             if(command.set_repeat) repeat = command.repeat_one;
             if(command.select) {
+                audio_output_set_active(false);
                 audio_player_stop();
                 status.info = command.info;
                 status.index = command.index;
@@ -102,6 +134,7 @@ static void audio_task(void *argument)
         }
         /* 统一处理起播和重播，后续格式解码也从这里分派。 */
         if(start) {
+            audio_output_set_active(false);
             audio_player_start(&status.info);
             if(pause_after_start && audio_player_state() == AUDIO_PLAYING) audio_player_toggle();
         }
@@ -113,6 +146,15 @@ static void audio_task(void *argument)
             last_state = status.state;
             last_elapsed = status.elapsed;
         }
+output:
+        if(s_usb_mode) {
+            if(!usb_audio_running()) usb_audio_start();
+            usb_audio_poll(pdMS_TO_TICKS(20));
+            s_usb_playing = usb_audio_audible();
+            audio_output_set_active(s_usb_playing);
+            continue;
+        }
+        audio_output_set_active(audio_player_state() == AUDIO_PLAYING);
         /* 只有音频任务补 DMA；UI 锁和墨水屏刷新不能阻塞这里。 */
         audio_player_poll(status.state == AUDIO_PLAYING ? pdMS_TO_TICKS(1000) : pdMS_TO_TICKS(20));
     }
@@ -155,9 +197,28 @@ static void music_task(void *argument)
     (void)argument;
     music_request_t request;
     audio_status_t status;
+    bool card_seen = false, usb_mode = false, usb_playing = false;
     while(1) {
+        if(usb_mode != s_usb_mode || usb_playing != s_usb_playing) {
+            usb_mode = s_usb_mode;
+            usb_playing = s_usb_playing;
+            if(s_callbacks.usb) s_callbacks.usb(usb_mode, usb_playing);
+        }
+        while(1) {
+            taskENTER_CRITICAL();
+            bool pending = s_notice_read != s_notice_write;
+            player_notice_t notice = pending ? s_notices[s_notice_read++ % 8U] : 0;
+            taskEXIT_CRITICAL();
+            if(!pending) break;
+            /* 断开事件不能被状态快照合并掉，UI 忙时仍须恢复 SD 选曲。 */
+            if(notice == PLAYER_USB_DISCONNECTED && !s_usb_mode && s_available && s_window.count)
+                audio_select(s_window.first_index, &s_window.items[0], false);
+            if(s_callbacks.notice) s_callbacks.notice(notice);
+        }
         sdcard_event_t event = sdcard_poll();
         if(event == SDCARD_REMOVED) {
+            if(card_seen && s_callbacks.notice) s_callbacks.notice(PLAYER_CARD_REMOVED);
+            card_seen = false;
             stop_audio();
             sdcard_unmount();
             s_window.count = 0;
@@ -166,6 +227,8 @@ static void music_task(void *argument)
             LOGI("SD", "card removed");
         }
         if(event == SDCARD_INSERTED) {
+            card_seen = true;
+            if(s_callbacks.notice) s_callbacks.notice(PLAYER_CARD_INSERTED);
             stop_audio();
             if(s_callbacks.media) s_callbacks.media(PLAYER_SCANNING);
             FRESULT result = sdcard_mount_and_scan();
@@ -184,11 +247,11 @@ static void music_task(void *argument)
                  (unsigned long)s_window.total, (unsigned)xPortGetFreeHeapSize(),
                  (unsigned)xPortGetMinimumEverFreeHeapSize());
         }
-        if(xQueueReceive(s_requests, &request, pdMS_TO_TICKS(20)) == pdTRUE && s_available) {
+        if(xQueueReceive(s_requests, &request, pdMS_TO_TICKS(20)) == pdTRUE && s_available && !s_usb_mode) {
             if(request.select && update_window(request.select_index, true, s_window.total) != FR_OK) continue;
             update_window(request.index, false, s_window.total);
         }
-        if(xQueueReceive(s_status, &status, 0) != pdTRUE || !s_available) continue;
+        if(xQueueReceive(s_status, &status, 0) != pdTRUE || !s_available || s_usb_mode) continue;
         if(s_callbacks.playback)
             s_callbacks.playback(status.index, &status.info, status.elapsed, status.state == AUDIO_PLAYING);
         if(status.state == AUDIO_ERROR && s_callbacks.error) s_callbacks.error();
@@ -221,7 +284,7 @@ failed:
 
 void player_toggle(void)
 {
-    if(!s_available) return;
+    if(!s_available || usb_audio_connected()) return;
     audio_command_t command = {0};
     taskENTER_CRITICAL();
     xQueuePeek(s_commands, &command, 0);
@@ -233,7 +296,7 @@ void player_toggle(void)
 
 void player_set_repeat(bool repeat_one)
 {
-    if(!s_available) return;
+    if(!s_available || usb_audio_connected()) return;
     audio_command_t command = {0};
     taskENTER_CRITICAL();
     xQueuePeek(s_commands, &command, 0);
@@ -246,7 +309,7 @@ void player_set_repeat(bool repeat_one)
 
 void player_request(uint32_t index, bool select)
 {
-    if(!s_available) return;
+    if(!s_available || usb_audio_connected()) return;
     music_request_t request = {.index = index, .select_index = index, .select = select};
     music_request_t pending;
     /* 浏览可以合并，但不能覆盖尚未处理的选曲确认。 */

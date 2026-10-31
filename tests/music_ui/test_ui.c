@@ -371,6 +371,32 @@ int main(int argc, char **argv)
     assert(!strcmp(lv_label_get_text(title_label), "扫描中"));
     publish(0, 1, true);
     assert(total_tracks == 1 && !playing && current_track == 0);
+    const uint32_t notice_glyphs[] = {0x62d4, 0x63d2, 0x8033, 0x673a, 0x8fde, 0x63a5, 0x65ad, 0x5f00, 0x5df2, 0x5361};
+    for(unsigned i = 0; i < sizeof(notice_glyphs) / sizeof(notice_glyphs[0]); ++i) {
+        lv_font_glyph_dsc_t glyph;
+        assert(lv_font_get_glyph_dsc(&fusion_pixel_12_cjk, &glyph, notice_glyphs[i], 0));
+        assert(!glyph.is_placeholder);
+    }
+    UI_show_notice(PLAYER_CARD_INSERTED);
+    UI_show_notice(PLAYER_USB_CONNECTED);
+    assert(!lv_obj_has_flag(notice_box, LV_OBJ_FLAG_HIDDEN));
+    assert(!strcmp(lv_label_get_text(notice_label), "SD卡已插入"));
+    lv_tick_inc(3000); lv_timer_handler();
+    assert(!strcmp(lv_label_get_text(notice_label), "USB已连接"));
+    lv_tick_inc(3000); lv_timer_handler();
+    assert(lv_obj_has_flag(notice_box, LV_OBJ_FLAG_HIDDEN));
+    UI_set_usb_status(true, false);
+    assert(!strcmp(lv_label_get_text(title_label), "USB Audio"));
+    assert(!strcmp(lv_label_get_text(audio_label), "48k/16b"));
+    unsigned old_toggles = toggles;
+    lv_obj_send_event(track_rows[2], LV_EVENT_CLICKED, NULL);
+    assert(toggles == old_toggles);
+    UI_set_usb_status(true, true);
+    assert(!strcmp(lv_label_get_text(status_label), "USB播放"));
+    UI_set_media_state(PLAYER_NO_CARD);
+    assert(!strcmp(lv_label_get_text(title_label), "USB Audio"));
+    UI_set_usb_status(false, false);
+    assert(!strcmp(lv_label_get_text(title_label), "未插卡"));
     (void)requested_repeat;
     lv_refr_now(NULL);
     check_bounds(lv_screen_active());

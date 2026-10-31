@@ -3,6 +3,7 @@
 #include "flac_decoder.h"
 #include "i2s.h"
 #include "audio_i2s.h"
+#include "audio_dma.h"
 #include "es9018.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -10,7 +11,6 @@
 #include <string.h>
 
 #define AUDIO_HALF_BYTES 12288U
-#define AUDIO_DMA_ERROR  4U
 
 static FIL s_file;
 /* 缓冲字节数固定；24/32 位使用 32 位槽，每半缓冲的帧数减半。 */
@@ -37,30 +37,12 @@ static bool s_wait_lock;
 static uint32_t s_lock_frames;
 static audio_state_t s_state;
 
-static void audio_notify(I2S_HandleTypeDef *hi2s, uint32_t event)
+static void audio_notify(uint32_t event)
 {
-    if(hi2s == &hi2s2 && s_player != NULL)
-    {
-        BaseType_t wake = pdFALSE;
-        ++s_dma_edges;
-        xTaskNotifyFromISR(s_player, event, eSetBits, &wake);
-        portYIELD_FROM_ISR(wake);
-    }
-}
-
-void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
-{
-    audio_notify(hi2s, 1U);
-}
-
-void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
-{
-    audio_notify(hi2s, 2U);
-}
-
-void HAL_I2S_ErrorCallback(I2S_HandleTypeDef *hi2s)
-{
-    audio_notify(hi2s, AUDIO_DMA_ERROR);
+    BaseType_t wake = pdFALSE;
+    ++s_dma_edges;
+    xTaskNotifyFromISR(s_player, event, eSetBits, &wake);
+    portYIELD_FROM_ISR(wake);
 }
 
 static uint16_t wav_u16(const uint8_t *p)
@@ -197,8 +179,9 @@ static bool audio_fill_half(unsigned half)
 
 void audio_player_stop(void)
 {
-    s_player = NULL;
     if(s_dma_started) {
+        audio_dma_set_handler(NULL);
+        s_player = NULL;
         HAL_I2S_DMAStop(&hi2s2);
         s_dma_started = false;
     }
@@ -260,6 +243,7 @@ bool audio_player_start(music_info_t *info)
     s_half = 0;
     s_expected_edge = 1;
     s_player = xTaskGetCurrentTaskHandle();
+    audio_dma_set_handler(audio_notify);
     /* HAL 的 Size 为声道样本数；24/32 位时 HAL 内部会乘二转为半字数。 */
     if(HAL_I2S_Transmit_DMA(&hi2s2, s_audio[0].words, s_half_frames * 4U) != HAL_OK) {
         LOGE("AUDIO", "I2S DMA start failed");
@@ -269,6 +253,7 @@ bool audio_player_start(music_info_t *info)
     s_state = AUDIO_PLAYING;
     return true;
 failed:
+    audio_dma_set_handler(NULL);
     /* 起播失败统一释放文件和 DMA。 */
     audio_player_stop();
     s_state = AUDIO_ERROR;

@@ -324,5 +324,10 @@ void DMA2_Stream7_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+void EXTI15_10_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(EAR_DET_Pin);
+}
+
 
 /* USER CODE END 1 */

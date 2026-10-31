@@ -20,6 +20,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_audio_if.h"
+#include "usb_audio.h"
 
 /* USER CODE BEGIN INCLUDE */
 
@@ -153,6 +154,8 @@ USBD_AUDIO_ItfTypeDef USBD_AUDIO_fops_FS =
 static int8_t AUDIO_Init_FS(uint32_t AudioFreq, uint32_t Volume, uint32_t options)
 {
   /* USER CODE BEGIN 0 */
+  usb_audio_set_stream(false);
+  usb_audio_set_mute(false);
   UNUSED(AudioFreq);
   UNUSED(Volume);
   UNUSED(options);
@@ -168,6 +171,7 @@ static int8_t AUDIO_Init_FS(uint32_t AudioFreq, uint32_t Volume, uint32_t option
 static int8_t AUDIO_DeInit_FS(uint32_t options)
 {
   /* USER CODE BEGIN 1 */
+  usb_audio_set_stream(false);
   UNUSED(options);
   return (USBD_OK);
   /* USER CODE END 1 */
@@ -186,6 +190,11 @@ static int8_t AUDIO_AudioCmd_FS(uint8_t* pbuf, uint32_t size, uint8_t cmd)
   switch(cmd)
   {
     case AUDIO_CMD_START:
+      usb_audio_set_stream(true);
+    break;
+
+    case AUDIO_CMD_STOP:
+      usb_audio_set_stream(false);
     break;
 
     case AUDIO_CMD_PLAY:
@@ -219,7 +228,7 @@ static int8_t AUDIO_VolumeCtl_FS(uint8_t vol)
 static int8_t AUDIO_MuteCtl_FS(uint8_t cmd)
 {
   /* USER CODE BEGIN 4 */
-  UNUSED(cmd);
+  usb_audio_set_mute(cmd != 0);
   return (USBD_OK);
   /* USER CODE END 4 */
 }
@@ -232,8 +241,7 @@ static int8_t AUDIO_MuteCtl_FS(uint8_t cmd)
 static int8_t AUDIO_PeriodicTC_FS(uint8_t *pbuf, uint32_t size, uint8_t cmd)
 {
   /* USER CODE BEGIN 5 */
-  UNUSED(pbuf);
-  UNUSED(size);
+  usb_audio_receive(pbuf, size);
   UNUSED(cmd);
   return (USBD_OK);
   /* USER CODE END 5 */

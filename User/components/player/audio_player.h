@@ -2,12 +2,11 @@
 #define AUDIO_PLAYER_H
 
 #include "music.h"
+#include "audio_dma.h"
 
 typedef enum {
     AUDIO_STOPPED, AUDIO_PLAYING, AUDIO_PAUSED, AUDIO_FINISHED, AUDIO_ERROR
 } audio_state_t;
-
-#define AUDIO_CONTROL_EVENT 8U
 
 /* 仅音频任务调用。FIL 和 DMA 缓冲均位于普通 SRAM。 */
 bool audio_player_start(music_info_t *info);
