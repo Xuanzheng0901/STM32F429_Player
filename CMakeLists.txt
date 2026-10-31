@@ -37,6 +37,20 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "Disable examples" FORCE)
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "Disable demos" FORCE)
+set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "Disable unused vector renderer" FORCE)
+set(LV_BUILD_CONF_PATH "${CMAKE_SOURCE_DIR}/User/components/display/lvgl_port/lv_conf.h" CACHE PATH "Path to lv_conf.h" FORCE)
+add_subdirectory(lvgl)
+
+#单独为lvgl启用Os优化
+target_compile_options(lvgl PRIVATE -Os)
+
+target_link_libraries(lvgl PRIVATE stm32cubemx)
+add_subdirectory(User/components)
+
+include(User/components/display/lvgl_port/lvgl_sources.cmake)
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -63,6 +77,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
-
+    lvgl
+    user_components
     # Add user defined libraries
 )
