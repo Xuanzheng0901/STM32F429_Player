@@ -1,6 +1,5 @@
 #include "flac_decoder.h"
 #include "decoder_memory.h"
-#include "audio_i2s.h"
 #include "log.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -119,7 +118,7 @@ bool flac_decoder_open(FIL *file, music_info_t *info)
     unsigned channels = (unsigned)((stream >> 41) & 7) + 1;
     unsigned bits = (unsigned)((stream >> 36) & 31) + 1;
     uint32_t rate = (uint32_t)(stream >> 44);
-    if(channels > 2 || (bits != 16 && bits != 24 && bits != 32) || !audio_i2s_sample_rate_supported(rate)) {
+    if(channels > 2 || (bits != 16 && bits != 24 && bits != 32) || rate == 0) {
         LOGW("FLAC", "unsupported stream: %lu Hz, %u channels, %u bits", (unsigned long)rate, channels, bits);
         goto failed;
     }

@@ -2,13 +2,10 @@
 #define PLAYER_H
 
 #include "music.h"
+#include "player_events.h"
 
 typedef enum { PLAYER_NO_CARD, PLAYER_SCANNING } player_media_t;
-typedef enum {
-    PLAYER_CARD_INSERTED, PLAYER_CARD_REMOVED,
-    PLAYER_USB_CONNECTED, PLAYER_USB_DISCONNECTED,
-    PLAYER_EAR_INSERTED, PLAYER_EAR_REMOVED
-} player_notice_t;
+
 
 /* 在曲库任务中同步通知，接收方复制数据、处理界面锁。
  * 接口可留空用于无界面播放，音频补数任务不调用这些接口。

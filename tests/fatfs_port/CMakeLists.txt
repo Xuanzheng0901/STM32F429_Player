@@ -20,7 +20,7 @@ add_executable(tags test_tags.c mock_platform.c ${PORT_SOURCES} ${METADATA_SOURC
 add_executable(library test_library.c mock_platform.c ${LIBRARY_SOURCES})
 foreach(TEST diskio filesystem removal tags library)
     target_include_directories(${TEST} PRIVATE mocks "${PORT}"
-        "${REPO}/User/components/sdcard" "${REPO}/User/components/player")
+        "${REPO}/User/components/audio" "${REPO}/User/components/sdcard" "${REPO}/User/components/player" "${REPO}/User/components/audio" "${REPO}/User/components/decoder")
     target_compile_features(${TEST} PRIVATE c_std_11)
     target_compile_options(${TEST} PRIVATE -Wall -Wextra -Werror -UNDEBUG)
     add_test(NAME ${TEST} COMMAND ${TEST})

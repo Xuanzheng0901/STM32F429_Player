@@ -4,10 +4,10 @@ enable_testing()
 get_filename_component(REPO "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(PLAYER "${REPO}/User/components/player")
 set(FATFS "${REPO}/User/components/fatfs")
-add_library(audio STATIC "${PLAYER}/audio_player.c" "${PLAYER}/audio_i2s.c" "${PLAYER}/audio_dma.c"
-    "${PLAYER}/mp3_decoder.c" "${PLAYER}/flac_decoder.c" "${PLAYER}/decoder_memory.c"
-    "${FATFS}/ff.c" "${FATFS}/ffunicode.c")
-target_include_directories(audio PUBLIC mocks "${PLAYER}" "${FATFS}")
+add_library(audio STATIC "${REPO}/User/components/audio/audio_player.c" "${REPO}/User/components/audio/audio_i2s.c" "${REPO}/User/components/audio/audio_dma.c"
+    "${REPO}/User/components/decoder/mp3_decoder.c" "${REPO}/User/components/decoder/flac_decoder.c" "${REPO}/User/components/decoder/decoder_memory.c"
+    "${REPO}/User/components/decoder/file_decoder.c" "${FATFS}/ff.c" "${FATFS}/ffunicode.c")
+target_include_directories(audio PUBLIC mocks "${PLAYER}" "${FATFS}" "${REPO}/User/components/audio" "${REPO}/User/components/decoder")
 target_compile_options(audio PRIVATE -O2 -fno-strict-aliasing -Wall -Wextra)
 
 foreach(FORMAT wav mp3 flac)
@@ -33,11 +33,11 @@ foreach(FORMAT wav mp3 flac)
     endforeach()
 endforeach()
 
-add_executable(i2s_clock test_i2s_clock.c "${PLAYER}/audio_i2s.c")
-target_include_directories(i2s_clock PRIVATE mocks "${PLAYER}")
+add_executable(i2s_clock test_i2s_clock.c "${REPO}/User/components/audio/audio_i2s.c")
+target_include_directories(i2s_clock PRIVATE mocks "${PLAYER}" "${REPO}/User/components/audio" "${REPO}/User/components/decoder")
 add_test(NAME i2s_clock COMMAND i2s_clock)
-add_executable(flac_reader test_reader.c "${PLAYER}/decoder_memory.c")
-target_include_directories(flac_reader PRIVATE mocks "${PLAYER}" "${FATFS}")
+add_executable(flac_reader test_reader.c "${REPO}/User/components/decoder/decoder_memory.c")
+target_include_directories(flac_reader PRIVATE mocks "${PLAYER}" "${FATFS}" "${REPO}/User/components/audio" "${REPO}/User/components/decoder")
 target_compile_options(flac_reader PRIVATE -O2 -fno-strict-aliasing -Wall -Wextra -UNDEBUG)
 target_link_libraries(flac_reader PRIVATE m)
 add_test(NAME flac_reader COMMAND flac_reader)

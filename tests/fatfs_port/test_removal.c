@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdio.h>
 #include <string.h>
+#include "../../User/components/audio/playback.c"
 #include "../../User/components/player/player.c"
 
 

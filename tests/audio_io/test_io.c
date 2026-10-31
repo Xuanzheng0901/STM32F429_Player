@@ -2,8 +2,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../User/components/player/usb_audio.c"
-#include "../../User/components/player/audio_output.c"
+#include "../../User/components/audio/usb_audio.c"
+#include "../../User/components/audio/audio_output.c"
 
 I2S_HandleTypeDef hi2s2;
 GPIO_TypeDef test_gpio;
