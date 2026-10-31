@@ -40,10 +40,14 @@ LVGL 使用 I1 颜色格式和 `LV_DISPLAY_RENDER_MODE_FULL`，默认刷新检�
 | `disp_buf1` | 8,288 B | 普通 SRAM；8 B 调色板 + 8,280 B 横屏像素 |
 | `previous_frame` | 8,280 B | 普通 SRAM；精确比较旧帧 |
 | `tx_buffer` | 368 B | 普通 SRAM；16 个原生行的转换和 SPI DMA 数据 |
-| LVGL 内置堆 | 24 KiB | 普通 SRAM；LVGL 对象等动态数据 |
-| FreeRTOS 堆 | 64 KiB | CCMRAM；任务栈、队列、信号量及内核对象 |
+| LVGL 内置堆 | 24 KiB | CCMRAM `0x10000000`；LVGL 对象等动态数据 |
+| FreeRTOS 堆 | 40 KiB | CCMRAM `0x10006000`；动态任务栈、队列及内核对象 |
 
 三份显示像素缓冲共 16,936 B。flush 跳过 8 B 调色板，传入每行 45 B 的 I1 图像；等待发送、BUSY 和参考帧同步完成后调用 `lv_display_flush_ready()`。
+
+`LV_ATTRIBUTE_LARGE_RAM_ARRAY` 将对象池放入 `.lvgl_heap (NOLOAD)`，不占 Flash；TLSF 初始化自身的管理数据，不依赖上电清零。像素帧缓冲、SPI DMA 中转区仍在普通 SRAM，DMA 不访问 CCMRAM。
+
+LVGL 启用 FreeRTOS 时还创建 `swdraw` 软件绘制线程，即使只有一个绘制单元，也占用 16 KiB 动态任务栈。另有 `LVGL` 管理任务 4 KiB；曲库任务保留 16 KiB 栈，改为普通 SRAM 静态分配后，40 KiB RTOS 堆才能同时容纳这些线程。分配预算见 [heap_budget](../../../tests/heap_budget/README.md)。
 
 默认字体为 `fusion_pixel_12_cjk`。使用 24 像素字体时，在应用源文件中声明 `LV_FONT_DECLARE(fusion_pixel_24);`，再通过 `lv_obj_set_style_text_font()` 设置。
 

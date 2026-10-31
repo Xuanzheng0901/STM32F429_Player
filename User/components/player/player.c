@@ -6,6 +6,12 @@
 #include "log.h"
 #include "audio_player.h"
 
+#define MUSIC_STACK_WORDS 4096U
+
+/* 保留 16 KiB 曲库栈容量，改为普通 SRAM 静态分配，腾出 CCMRAM 给 LVGL。 */
+static _Alignas(8) StackType_t s_music_stack[MUSIC_STACK_WORDS];
+static StaticTask_t s_music_task_storage;
+
 typedef struct {
     uint32_t index;
     uint32_t select_index;
@@ -174,7 +180,9 @@ static void music_task(void *argument)
             if(s_window.count) audio_select(0, &s_window.items[0], false);
             if(s_callbacks.window) s_callbacks.window(&s_window, 0, true);
             s_available = true;
-            LOGI("SD", "library ready: %lu songs", (unsigned long)s_window.total);
+            LOGI("SD", "library ready: %lu songs, RTOS heap free=%u min=%u",
+                 (unsigned long)s_window.total, (unsigned)xPortGetFreeHeapSize(),
+                 (unsigned)xPortGetMinimumEverFreeHeapSize());
         }
         if(xQueueReceive(s_requests, &request, pdMS_TO_TICKS(20)) == pdTRUE && s_available) {
             if(request.select && update_window(request.select_index, true, s_window.total) != FR_OK) continue;
@@ -197,7 +205,8 @@ bool player_init(const player_callbacks_t *callbacks)
     s_stop_ack = xQueueCreate(1, sizeof(bool));
     if(!s_requests || !s_commands || !s_status || !s_stop_ack) goto failed;
     if(xTaskCreate(audio_task, "audio", 2048, NULL, 7, &s_audio_task) != pdPASS) goto failed;
-    if(xTaskCreate(music_task, "music", 4096, NULL, 1, NULL) != pdPASS) goto failed;
+    if(!xTaskCreateStatic(music_task, "music", MUSIC_STACK_WORDS, NULL, 1,
+                         s_music_stack, &s_music_task_storage)) goto failed;
     return true;
 failed:
     if(s_audio_task) vTaskDelete(s_audio_task);

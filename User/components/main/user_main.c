@@ -21,4 +21,6 @@ void app_main(void)
         LOGE("PLAYER", "task creation failed");
         UI_set_music_error();
     }
+    LOGI("MEM", "RTOS heap: free=%u, min=%u bytes (startup task still active)",
+         (unsigned)xPortGetFreeHeapSize(), (unsigned)xPortGetMinimumEverFreeHeapSize());
 }

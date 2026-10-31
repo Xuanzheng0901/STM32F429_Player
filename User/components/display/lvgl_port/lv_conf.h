@@ -573,7 +573,8 @@
 #define LV_ATTRIBUTE_LARGE_CONST
 
 /** Compiler prefix for a large array declaration in RAM */
-#define LV_ATTRIBUTE_LARGE_RAM_ARRAY
+/* LVGL 对象池由 CPU 使用；显示和音频 DMA 缓冲仍放普通 SRAM。 */
+#define LV_ATTRIBUTE_LARGE_RAM_ARRAY __attribute__((section(".lvgl_heap"), aligned(8)))
 
 /** Place performance critical functions into a faster memory (e.g RAM) */
 #define LV_ATTRIBUTE_FAST_MEM

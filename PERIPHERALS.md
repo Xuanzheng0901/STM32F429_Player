@@ -24,21 +24,29 @@
 |--------|------------|----------|--------------------------|
 | Flash  | 0x08000000 | 2048 KiB | 程序与常量               |
 | SRAM   | 0x20000000 | 192 KiB  | 全局数据、主栈与外设缓冲 |
-| CCMRAM | 0x10000000 | 64 KiB   | FreeRTOS 动态堆          |
+| CCMRAM | 0x10000000 | 64 KiB   | LVGL 24 KiB＋FreeRTOS 40 KiB |
 
-FreeRTOS 使用 `heap_4.c`，堆大小为 65536 字节。动态创建的任务栈、任务控制块、队列和信号量从该堆分配。
+FreeRTOS 使用 `heap_4.c`，堆大小为 40960 字节。动态任务栈、任务控制块、队列和信号量从该堆分配；music 任务的 16 KiB 栈及 TCB 静态放在普通 SRAM。
 
-堆迁移涉及三个文件：
+内存布局由以下配置共同确定：
 
-- `Core/Inc/FreeRTOSConfig.h`：设置 `configAPPLICATION_ALLOCATED_HEAP=1`。
+- `Core/Inc/FreeRTOSConfig.h`：设置 `configAPPLICATION_ALLOCATED_HEAP=1`、40 KiB 堆，`.ioc` 保持相同配额。
 - `Core/Src/freertos.c`：定义 `ucHeap`，放入 `.freertos_heap` 段。
-- `STM32F429XX_FLASH.ld`：将 `.freertos_heap (NOLOAD)` 映射至 CCMRAM，并按 8 字节对齐。
+- `lv_conf.h`：将 24 KiB LVGL 对象池标记为 `.lvgl_heap`。
+- `STM32F429XX_FLASH.ld`：先放置 `.lvgl_heap (NOLOAD)`，再放置 `.freertos_heap (NOLOAD)`，均按 8 字节对齐。
 
 ```c
 uint8_t ucHeap[configTOTAL_HEAP_SIZE] __attribute__((section(".freertos_heap")));
 ```
 
 ```ld
+.lvgl_heap (NOLOAD):
+{
+  . = ALIGN(8);
+  *(.lvgl_heap)
+  . = ALIGN(8);
+} >CCMRAM
+
 .freertos_heap (NOLOAD):
 {
   . = ALIGN(8);
@@ -47,7 +55,7 @@ uint8_t ucHeap[configTOTAL_HEAP_SIZE] __attribute__((section(".freertos_heap")))
 } >CCMRAM
 ```
 
-`ucHeap` 地址为 `0x10000000`，大小为 `0x10000`；`.freertos_heap` 为 NOBITS 段。
+LVGL 池地址为 `0x10000000`、大小为 `0x6000`；`ucHeap` 地址为 `0x10006000`、大小为 `0xA000`。两段均为 NOBITS，不占 Flash。显示、音频及 SDIO DMA 缓冲保持在普通 SRAM。
 
 默认任务为 `defaultTask`，优先级 Normal，栈大小 4096 字节。默认任务初始化 USB Device，随后以 1 ms 间隔休眠。
 
@@ -204,5 +212,5 @@ cmake --build --preset Release -j 8
 
 | 配置    |     SRAM |   CCMRAM |    Flash |
 |---------|---------:|---------:|---------:|
-| Debug | 160,152 B | 65,536 B | 586,676 B |
-| Release | 160,136 B | 65,536 B | 527,300 B |
+| Debug | 152,056 B | 65,536 B | 591,780 B |
+| Release | 152,040 B | 65,536 B | 532,416 B |

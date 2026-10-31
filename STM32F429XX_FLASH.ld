@@ -266,6 +266,13 @@ SECTIONS
     libgcc.a:* ( * )
   }
 
+    .lvgl_heap (NOLOAD):
+    {
+      . = ALIGN(8);
+      *(.lvgl_heap)
+      . = ALIGN(8);
+    } >CCMRAM
+
     .freertos_heap (NOLOAD):
     {
       . = ALIGN(8);

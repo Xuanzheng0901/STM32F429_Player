@@ -23,5 +23,8 @@ Windows 使用 MinGW GCC。先把编译器 bin 目录加入当前进程 PATH；�
 | music_ui | 1 | 真实 LVGL、列表焦点/滚动/边界、曲目信息所有权、状态更新和无卡/扫描/重新载入 |
 | player_control | 2 | Windows Fiber 保留任务循环；浏览合并、选曲、暂停、循环、EOF、错误恢复及无 UI 模式 |
 | display_port | 5 | 全刷/快刷/局刷、编码器回绕、日志 |
+| heap_budget | 1 | 40 KiB RTOS 堆启动峰值、swdraw 线程、Idle 回收前挂载与反复重挂载 |
 
-当前共 42 项通过。音频夹具沿用 F407 工程生成的 FAT32 镜像及独立 FFmpeg PCM 参考；生成程序已迁入本工程，测试全部链接当前 F429 的应用及 FatFs 代码。主机 HAL/RTOS 为模拟接口，不是板上音频、真实热插拔时序、电气或吞吐证据。
+当前共 43 项通过。音频夹具沿用 F407 工程生成的 FAT32 镜像及独立 FFmpeg PCM 参考；生成程序已迁入本工程，测试全部链接当前 F429 的应用及 FatFs 代码。主机 HAL/RTOS 为模拟接口，不是板上音频、真实热插拔时序、电气或吞吐证据。
+
+堆预算测试使用生产 heap_4 分配器，运行命令和边界见 [heap_budget](heap_budget/README.md)。

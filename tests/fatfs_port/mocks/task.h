@@ -5,6 +5,9 @@ void vTaskDelay(TickType_t ticks);
 typedef void *TaskHandle_t;
 BaseType_t xTaskCreate(void (*entry)(void *), const char *name, unsigned stack,
                        void *argument, unsigned priority, TaskHandle_t *handle);
+TaskHandle_t xTaskCreateStatic(void (*entry)(void *), const char *name, unsigned stack,
+                              void *argument, unsigned priority, StackType_t *memory,
+                              StaticTask_t *storage);
 #define taskENTER_CRITICAL() ((void)0)
 #define taskEXIT_CRITICAL() ((void)0)
 

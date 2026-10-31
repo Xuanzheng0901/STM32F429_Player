@@ -28,13 +28,15 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 
 当前链接结果：
 
-| 配置 | SRAM | CCMRAM 预留堆 | Flash 地址跨度 |
+| 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 160,152 B | 65,536 B | 586,676 B |
-| Release | 160,136 B | 65,536 B | 527,300 B |
+| Debug | 152,056 B | 24+40 KiB | 591,780 B |
+| Release | 152,040 B | 24+40 KiB | 532,416 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
-普通 SRAM 中 s_audio 为 24 KiB、s_memory 为 39 KiB、s_bounce 为 4 KiB，均已通过 ELF 符号地址确认处于 0x20000000～0x20030000；64 KiB FreeRTOS 堆在 0x10000000 的 CCMRAM。CCMRAM 的链接占用是预留堆容量，不是任务已用满堆。
+普通 SRAM 中 s_audio 为 24 KiB、s_memory 为 39 KiB、s_bounce 为 4 KiB，均已通过 ELF 符号地址确认处于 0x20000000～0x20030000；LVGL 24 KiB 对象池位于 CCMRAM 的 0x10000000，FreeRTOS 40 KiB 堆位于 0x10006000，均为 NOLOAD。music 任务的 16 KiB 栈及 TCB 静态放在普通 SRAM，保留原栈容量，净释放普通 SRAM 8096 B。
+
+FreeRTOS 动态堆中的长期任务栈合计 29 KiB，包含 audio 8 KiB、LVGL 管理 4 KiB、日志 1 KiB 和内部 swdraw 绘制线程 16 KiB；不能漏计最后一项。启动任务另占 4 KiB，删除后等 Idle 回收。当前分配预算见 [heap_budget](../../tests/heap_budget/README.md)，板上通过启动和挂载后的 RTOS heap free/min 日志核对。
 
 主机验证见 [测试说明](../../tests/README.md)。实际卡座插拔、SDIO 吞吐、DAC/耳放输出和墨水屏效果仍需上板验证。

@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.22)
+project(heap_budget_tests C)
+enable_testing()
+get_filename_component(REPO "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+file(READ "${REPO}/Core/Inc/FreeRTOSConfig.h" CONFIG)
+string(REGEX MATCH "configTOTAL_HEAP_SIZE[^\n]*size_t[)]([0-9]+)" HEAP_CONFIG "${CONFIG}")
+set(HEAP_BYTES "${CMAKE_MATCH_1}")
+add_executable(heap_budget test_budget.c
+    "${REPO}/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c")
+target_include_directories(heap_budget PRIVATE mocks)
+target_compile_definitions(heap_budget PRIVATE TEST_HEAP_BYTES=${HEAP_BYTES})
+target_compile_options(heap_budget PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME heap_budget COMMAND heap_budget)

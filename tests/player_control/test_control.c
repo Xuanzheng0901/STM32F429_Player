@@ -52,6 +52,14 @@ int xTaskCreate(TaskFunction_t fn, const char *name, unsigned stack, void *arg, 
     if(out) *out = t;
     return pdPASS;
 }
+TaskHandle_t xTaskCreateStatic(TaskFunction_t fn, const char *name, unsigned stack, void *arg,
+                              unsigned priority, StackType_t *memory, StaticTask_t *storage)
+{
+    assert(stack == 4096 && memory && storage && !((uintptr_t)memory & 7));
+    TaskHandle_t task;
+    assert(xTaskCreate(fn, name, stack, arg, priority, &task) == pdPASS);
+    return task;
+}
 void vTaskDelete(TaskHandle_t task) { DeleteFiber(((struct test_task *)task)->fiber); }
 int xTaskNotify(TaskHandle_t task, uint32_t bits, eNotifyAction action)
 { assert(task == &tasks[0] && bits == AUDIO_CONTROL_EVENT && action == eSetBits); return pdTRUE; }

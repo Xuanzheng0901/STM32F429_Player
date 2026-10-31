@@ -4,6 +4,8 @@
 #include <stddef.h>
 typedef int BaseType_t;
 typedef uint32_t TickType_t;
+typedef uint32_t StackType_t;
+typedef struct { uint32_t unused[23]; } StaticTask_t;
 typedef struct { int held; } StaticSemaphore_t;
 typedef StaticSemaphore_t *SemaphoreHandle_t;
 typedef struct { uint32_t items[4]; unsigned head, count, size; uint8_t *data; } StaticQueue_t;

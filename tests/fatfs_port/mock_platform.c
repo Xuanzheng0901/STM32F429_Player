@@ -38,6 +38,16 @@ BaseType_t xTaskCreate(void (*entry)(void *), const char *name, unsigned stack,
     return pdPASS;
 }
 
+TaskHandle_t xTaskCreateStatic(void (*entry)(void *), const char *name, unsigned stack,
+                              void *argument, unsigned priority, StackType_t *memory,
+                              StaticTask_t *storage)
+{
+    assert(memory && storage);
+    TaskHandle_t task;
+    xTaskCreate(entry, name, stack, argument, priority, &task);
+    return task;
+}
+
 void mock_clear_counters(void)
 {
     mock_dma_calls = mock_max_blocks = mock_aborts = 0;
