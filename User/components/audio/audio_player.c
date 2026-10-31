@@ -9,9 +9,9 @@
 #include "log.h"
 #include <string.h>
 
-#define AUDIO_HALF_BYTES 12288U
+#define AUDIO_HALF_BYTES 24576U
 
-/* 缓冲字节数固定；24/32 位使用 32 位槽，每半缓冲的帧数减半。 */
+/* 每半缓冲 24 KiB：96 kHz 宽格式可用 3072 帧/32 ms，吸收整块 FLAC 解码峰值。 */
 static union {
     int16_t pcm16[AUDIO_HALF_BYTES / 2U];
     int32_t pcm32[AUDIO_HALF_BYTES / 4U];
@@ -28,6 +28,7 @@ static unsigned s_half;
 static uint32_t s_expected_edge;
 static bool s_dma_started;
 static bool s_eof;
+static TickType_t s_decode_ticks;
 static bool s_wait_lock;
 static uint32_t s_lock_frames;
 static audio_state_t s_state;
@@ -43,7 +44,9 @@ static void audio_notify(uint32_t event)
 static bool audio_fill_half(unsigned half)
 {
     memset(&s_audio[half], 0, sizeof(s_audio[half]));
+    TickType_t started = xTaskGetTickCount();
     if(!file_decoder_read(&s_audio[half], s_half_frames, &s_valid_frames[half])) return false;
+    s_decode_ticks = xTaskGetTickCount() - started;
     /* I2S 数据寄存器为 16 位，先发送高半字。 */
     if(s_bits > 16U) {
         for(uint32_t i = 0; i < s_valid_frames[half] * 2U; ++i) {
@@ -165,10 +168,12 @@ audio_state_t audio_player_poll(uint32_t timeout_ticks)
     }
     /* 只补写 DMA 已经消费的半缓冲，并检查补数是否赶上下一轮。 */
     TickType_t refill_start = xTaskGetTickCount();
+    s_decode_ticks = 0;
     if(!s_wait_lock && !audio_fill_half(s_half)) goto failed;
     if(s_dma_edges != s_expected_edge) {
-        LOGE("AUDIO", "audio refill missed deadline: refill=%lu ms, budget=%lu ms",
+        LOGE("AUDIO", "audio refill missed deadline: refill=%lu ms, decode/read=%lu ms, budget=%lu ms",
              (unsigned long)((xTaskGetTickCount() - refill_start) * 1000U / configTICK_RATE_HZ),
+             (unsigned long)(s_decode_ticks * 1000U / configTICK_RATE_HZ),
              (unsigned long)(s_half_frames * 1000U / s_sample_rate));
         goto failed;
     }

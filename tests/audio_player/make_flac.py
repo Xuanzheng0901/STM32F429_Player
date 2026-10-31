@@ -29,7 +29,8 @@ cases = [('FLAC', 44100, 2, 16, 4096), ('WAV', 48000, 2, 16, 0),
          ('FLAC', 44100, 2, 32, 4096)]
 for index, (ext, rate, channels, bits, block) in enumerate(cases):
     pcm = bytearray()
-    for i in range(rate * 3):
+    seconds = 20 if index == 6 else 3
+    for i in range(rate * seconds):
         for channel in range(channels):
             sample = int((1 << (bits - 3)) * math.sin(2 * math.pi * (440 + 211 * channel) * i / rate))
             if index == 11: sample = ((i * 17239 + channel * 7919) % 60001) - 30000
@@ -75,7 +76,7 @@ for index, (ext, rate, channels, bits, block) in enumerate(cases):
     reference_source = wav if ext == 'WAV' and block == 2 else target
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(reference_source), *options, '-f', 's16le' if bits == 16 else 's32le',
                     str(out / f'expected{index}.pcm')], check=True)
-    files.append((name, target.read_bytes())); manifest.append(f'{name} {rate} 3 {bits}\n')
+    files.append((name, target.read_bytes())); manifest.append(f'{name} {rate} {seconds} {bits}\n')
 
 base = bytearray(files[0][1])
 big = bytearray(base); big[10:12] = b'\xff\xff'

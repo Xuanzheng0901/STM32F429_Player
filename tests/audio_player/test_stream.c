@@ -35,8 +35,8 @@ void test_log(const char *tag, const char *format, ...)
     char message[512];
     va_list args; va_start(args, format); vsnprintf(message, sizeof(message), format, args); va_end(args);
     printf("%s: %s\n", tag, message);
-    if(strstr(message, "refill=40 ms, file read=40 ms, budget=32 ms")) ++slow_logs;
-    if(strstr(message, "audio refill missed deadline: refill=40 ms, budget=32 ms")) ++deadline_logs;
+    if(strstr(message, "refill=80 ms, file read=80 ms, budget=64 ms")) ++slow_logs;
+    if(strstr(message, "audio refill missed deadline:")) ++deadline_logs;
 }
 HAL_I2S_StateTypeDef HAL_I2S_GetState(I2S_HandleTypeDef *h) { return h->State; }
 void test_i2s_disable(I2S_HandleTypeDef *h) { assert(h == &hi2s2 && !active); }
@@ -120,7 +120,7 @@ HAL_StatusTypeDef HAL_I2S_Transmit_DMA(I2S_HandleTypeDef *h, uint16_t *data, uin
     assert(!active && h == &hi2s2 && !((uintptr_t)data & 3));
     sample_words = h->Init.DataFormat == I2S_DATAFORMAT_16B ? 1 : 2;
     /* 与 STM32 HAL 一致：宽格式 Size 为样本数，DMA 实际搬运两倍半字。 */
-    assert(words * sample_words == 12288);
+    assert(words * sample_words == 24576);
     audio = data; half_words = words * sample_words / 2; next_half = locks = silent = halves = preroll_halves = 0;
     started = paused = false; active = true; ++starts;
     active_track = track;
@@ -143,8 +143,15 @@ DRESULT disk_read(BYTE d, BYTE *buffer, DWORD sector, UINT count)
     assert(!d && count);
     if(active && !injected && !strcmp(mode, "read_error")) { injected = true; return RES_ERROR; }
     if(active && !injected && !strcmp(mode, "slow_read") && track == 3) {
-        /* 24 位输出只有 32 ms，模拟读卡耗时 40 ms 且 DMA 已切到下一半。 */
-        injected = true; ticks += 40; complete_half();
+        /* 48 kHz 宽格式为 64 ms；超过新预算仍须报错，不能放松相位检查。 */
+        injected = true; ticks += 80; complete_half();
+    }
+    if(active && !injected && !strcmp(mode, "highres_jitter") && track == 6 && audio_player_elapsed() >= 15) {
+        /* 在 96k/24b 播放 15 秒后读卡延迟 20 ms；旧的 16 ms 缓冲无法承受。 */
+        injected = true;
+        ticks += 20;
+        uint32_t budget = (uint64_t)(half_words / (2 * sample_words)) * 1000 / rate;
+        if(20 >= budget) complete_half();
     }
     assert(!fseek(image, (long)sector * 512, SEEK_SET));
     return fread(buffer, 512, count, image) == count ? RES_OK : RES_ERROR;
@@ -192,7 +199,7 @@ int main(int argc, char **argv)
                 assert(audio_player_elapsed() == elapsed && audio_player_toggle()); toggled = true;
             }
             if(!strcmp(mode, "switch") && track == 0 && started) break;
-            assert(halves < (uint64_t)rate * ((duration ? duration : 4) + 2) / (3072 / sample_words) + 40);
+            assert(halves < (uint64_t)rate * ((duration ? duration : 4) + 2) / (half_words / (2 * sample_words)) + 40);
         }
         if((!strcmp(mode, "read_error") && track == 0) || (!strcmp(mode, "slow_read") && track == 3))
             assert(injected && audio_player_state() == AUDIO_ERROR);
@@ -203,6 +210,7 @@ int main(int argc, char **argv)
     }
     assert(track >= 12 && starts == track && stops == track && !active);
     if(!strcmp(mode, "slow_read")) assert(slow_logs == 1 && deadline_logs == 1);
+    if(!strcmp(mode, "highres_jitter")) assert(injected && deadline_logs == 0);
     fclose(manifest);
 #ifndef TEST_FLAC
     /* VBR Xing/Info duration includes all audio frames, independent of first-frame bitrate. */

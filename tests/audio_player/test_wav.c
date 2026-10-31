@@ -40,7 +40,7 @@ HAL_StatusTypeDef ES9018_read_register(uint8_t reg, uint8_t *value)
     if(strcmp(mode, "lock_timeout") == 0 && starts == 1) {
         injected = 1; *value = 0x10; return HAL_OK;
     }
-    if(strcmp(mode, "lock_delay") == 0 && lock_reads < 5) { *value = 0x10; return HAL_OK; }
+    if(strcmp(mode, "lock_delay") == 0 && (uint64_t)lock_reads * (half_words / 2) * 1000 < (uint64_t)rates[starts - 1] * 400) { *value = 0x10; return HAL_OK; }
     dac_locked = 1; *value = 0x10 | ES9018_STATUS_LOCK; return HAL_OK;
 }
 
@@ -95,7 +95,8 @@ static void complete_half(void)
         assert(audio_player_elapsed() == 0);
     } else if(!stream_started) {
         assert(dac_locked && silent_halves >= 2);
-        if(strcmp(mode, "lock_delay") == 0) assert(silent_halves >= 6);
+        if(strcmp(mode, "lock_delay") == 0)
+            assert((uint64_t)silent_halves * (half_words / 2) * 1000 >= (uint64_t)rates[starts - 1] * 400);
         stream_started = 1;
     }
     /* Model what DMA consumed; compare every sample, including mono expansion
@@ -144,7 +145,7 @@ HAL_StatusTypeDef HAL_I2S_Init(I2S_HandleTypeDef *handle)
 HAL_StatusTypeDef HAL_I2S_Transmit_DMA(I2S_HandleTypeDef *handle, uint16_t *data, uint16_t words)
 {
     assert(handle == &hi2s2 && !active && words % 4 == 0 && ((uintptr_t)data & 3) == 0);
-    assert(words == 12288); /* Shared WAV/MP3 buffer, 6144 stereo frames. */
+    assert(words == 24576); /* 48 KiB DMA，16 位双声道共 12288 帧。 */
     audio = data; half_words = words / 2; next_half = 0; active = 1;
     lock_reads = silent_halves = 0;
     dac_locked = stream_started = 0;
