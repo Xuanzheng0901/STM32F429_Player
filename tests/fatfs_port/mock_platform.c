@@ -19,6 +19,8 @@ TickType_t mock_ticks;
 void (*mock_wait_hook)(void);
 void (*mock_dma_hook)(void);
 unsigned mock_task_calls;
+static bool peripheral_reset;
+unsigned mock_deinit_calls, mock_reset_calls;
 static void (*detect_entry)(void *);
 static jmp_buf detect_exit;
 static unsigned detect_samples;
@@ -109,7 +111,26 @@ BaseType_t xQueueSendFromISR(QueueHandle_t queue, const void *item, BaseType_t *
 int HAL_GPIO_ReadPin(void *port, unsigned pin)
 { assert(port == SDIO_CD_GPIO_Port && pin == SDIO_CD_Pin); return mock_present ? GPIO_PIN_RESET : 1; }
 HAL_StatusTypeDef HAL_SD_Init(SD_HandleTypeDef *handle)
-{ assert(handle == &hsd); mock_init_calls++; return mock_init_fail ? HAL_ERROR : HAL_OK; }
+{
+    assert(handle == &hsd && handle->State == HAL_SD_STATE_RESET && peripheral_reset);
+    peripheral_reset = false;
+    handle->State = 1;
+    mock_init_calls++;
+    return mock_init_fail ? HAL_ERROR : HAL_OK;
+}
+HAL_StatusTypeDef HAL_SD_DeInit(SD_HandleTypeDef *handle)
+{
+    assert(handle == &hsd && handle->State != HAL_SD_STATE_RESET);
+    handle->State = HAL_SD_STATE_RESET;
+    ++mock_deinit_calls;
+    return HAL_OK;
+}
+void mock_sdio_reset(void)
+{
+    assert(hsd.State == HAL_SD_STATE_RESET);
+    peripheral_reset = true;
+    ++mock_reset_calls;
+}
 HAL_StatusTypeDef HAL_SD_ConfigWideBusOperation(SD_HandleTypeDef *handle, unsigned width)
 { assert(handle == &hsd && width == SDIO_BUS_WIDE_4B); mock_wide_calls++; return mock_wide_fail ? HAL_ERROR : HAL_OK; }
 int HAL_SD_GetCardState(SD_HandleTypeDef *handle)

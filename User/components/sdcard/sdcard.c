@@ -1,6 +1,7 @@
 #include "sdcard.h"
 #include "sdmmc.h"
 #include "music_library.h"
+#include "log.h"
 
 static FATFS s_filesystem;
 static uint32_t s_total;
@@ -40,7 +41,11 @@ FRESULT sdcard_mount_and_scan(void)
     sdcard_unmount();
     sdmmc_new_session();
     FRESULT result = f_mount(&s_filesystem, "0:", 1);
-    if(result == FR_OK) result = music_library_rebuild(&s_total);
+    LOGI("SD", "mount result: FatFs=%d", (int)result);
+    if(result == FR_OK) {
+        LOGI("SD", "rebuilding library");
+        result = music_library_rebuild(&s_total);
+    }
     s_ready = result == FR_OK;
     if(!s_ready) sdcard_unmount();
     return result;

@@ -44,3 +44,5 @@ sdmmc.c 管理 HAL SD 初始化、扇区读写、DMA 完成队列和传输互斥
 具体错误、超时、地址边界、分批和快速重插验证见 tests/fatfs_port/test_diskio.c。
 
 ffsystem.c 在卷/系统互斥锁等待超时时输出 volume、owner 和 held ticks，用于区分曲库长查找与底层读卡阻塞；FF_FS_TIMEOUT 仍为 1000 tick，不延长超时、不关闭互斥保护。
+
+每次卡重新初始化前，对已有 HAL SD 句柄执行 HAL_SD_DeInit，复位并释放 SDIO 外设，再由 HAL_SD_Init 重建 GPIO/DMA/中断及卡会话；不复用拔卡时可能残留的 DPSM/FIFO 状态。日志依次给出 reset and initialize、card init、bus configuration 和 ready，区分外设初始化、4 位总线和等待卡就绪的停留位置。

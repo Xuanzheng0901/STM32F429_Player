@@ -5,6 +5,7 @@
 #include "task.h"
 #include "audio_output.h"
 #include "usb_audio.h"
+#include "log.h"
 
 typedef struct {
     music_info_t info;
@@ -85,8 +86,7 @@ static void audio_task(void *argument)
                     audio_player_stop();
                 }
                 selected = false;
-                bool stopped = true;
-                xQueueOverwrite(s_stop_ack, &stopped);
+                xQueueOverwrite(s_stop_ack, &command.serial);
                 continue;
             }
             if(s_usb_mode || sdcard_is_removed()) goto output;
@@ -141,7 +141,7 @@ bool playback_init(void)
 {
     s_commands = xQueueCreate(1, sizeof(audio_command_t));
     s_status = xQueueCreate(1, sizeof(audio_status_t));
-    s_stop_ack = xQueueCreate(1, sizeof(bool));
+    s_stop_ack = xQueueCreate(1, sizeof(uint32_t));
     if(s_commands && s_status && s_stop_ack &&
        xTaskCreate(audio_task, "audio", 2048, NULL, 7, &s_audio_task) == pdPASS) return true;
     playback_deinit();
@@ -158,14 +158,27 @@ void playback_deinit(void)
     s_commands = s_status = s_stop_ack = NULL;
 }
 
-void playback_stop(void)
+bool playback_stop(void)
 {
     audio_command_t command = {.stop = true};
+    taskENTER_CRITICAL();
+    command.serial = ++s_serial;
     xQueueOverwrite(s_commands, &command);
+    taskEXIT_CRITICAL();
     xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
-    bool stopped;
-    xQueueReceive(s_stop_ack, &stopped, portMAX_DELAY);
-    xQueueReset(s_status);
+    TickType_t started = xTaskGetTickCount(), timeout = pdMS_TO_TICKS(2000);
+    uint32_t acknowledged;
+    while(xQueueReceive(s_stop_ack, &acknowledged, timeout) == pdTRUE) {
+        if(acknowledged == command.serial) {
+            xQueueReset(s_status);
+            return true;
+        }
+        TickType_t elapsed = xTaskGetTickCount() - started;
+        if(elapsed >= pdMS_TO_TICKS(2000)) break;
+        timeout = pdMS_TO_TICKS(2000) - elapsed;
+    }
+    LOGE("PLAYER", "audio stop acknowledgement timeout");
+    return false;
 }
 
 bool playback_status(audio_status_t *status) { return xQueueReceive(s_status, status, 0) == pdTRUE; }

@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     s_requests = xQueueCreate(1, sizeof(music_request_t));
     s_commands = xQueueCreate(1, sizeof(audio_command_t));
     s_status = xQueueCreate(1, sizeof(audio_status_t));
-    s_stop_ack = xQueueCreate(1, sizeof(bool));
+    s_stop_ack = xQueueCreate(1, sizeof(uint32_t));
     s_audio_task = (void *)1;
     s_callbacks = (player_callbacks_t){.window = window_changed, .playback = playback_changed, .error = failed, .media = observed_media};
     mock_present = 0;

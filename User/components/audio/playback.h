@@ -12,7 +12,8 @@ typedef struct {
 bool playback_init(void);
 void playback_deinit(void);
 uint32_t playback_select(uint32_t index, const music_info_t *info, bool autoplay);
-void playback_stop(void);
+/* 超时返回 false，调用者必须保留旧卷，不能继续卸载/重新挂载。 */
+bool playback_stop(void);
 uint32_t playback_toggle(void);
 bool playback_status(audio_status_t *status);
 bool playback_notice(player_notice_t *notice);

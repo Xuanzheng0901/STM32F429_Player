@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 typedef int BaseType_t;
+typedef uint32_t TickType_t;
 typedef void *TaskHandle_t;
 typedef uint32_t StackType_t;
 typedef struct { uint32_t unused[23]; } StaticTask_t;

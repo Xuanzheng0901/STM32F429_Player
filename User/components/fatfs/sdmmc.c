@@ -4,6 +4,7 @@
 #include "task.h"
 #include "queue.h"
 #include "semphr.h"
+#include "log.h"
 #include <string.h>
 
 #define TRANSFER_TIMEOUT pdMS_TO_TICKS(30000)
@@ -96,8 +97,21 @@ sdmmc_state_t sdmmc_initialize(void)
         s_events = xQueueCreateStatic(EVENT_COUNT, sizeof(uint32_t), s_queue_buffer, &s_queue_storage);
     }
     xSemaphoreTake(s_mutex, portMAX_DELAY);
-    s_initialized = card_present() && HAL_SD_Init(&hsd) == HAL_OK &&
-                    HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) == HAL_OK && wait_ready();
+    s_initialized = false;
+    if(card_present()) {
+        LOGI("SDIO", "reset and initialize");
+        /* 拔卡可能留下 DPSM/FIFO/中断状态；重建 DMA 和 SDIO，而非仅重跑卡命令。 */
+        if(hsd.State != HAL_SD_STATE_RESET) HAL_SD_DeInit(&hsd);
+        __HAL_RCC_SDIO_FORCE_RESET();
+        __HAL_RCC_SDIO_RELEASE_RESET();
+        xQueueReset(s_events);
+        HAL_StatusTypeDef result = HAL_SD_Init(&hsd);
+        LOGI("SDIO", "card init: status=%d error=0x%lX", (int)result, (unsigned long)hsd.ErrorCode);
+        if(result == HAL_OK) result = HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B);
+        LOGI("SDIO", "bus configuration: status=%d", (int)result);
+        s_initialized = result == HAL_OK && wait_ready();
+        LOGI("SDIO", "ready=%u error=0x%lX", s_initialized, (unsigned long)hsd.ErrorCode);
+    }
     xSemaphoreGive(s_mutex);
     return sdmmc_status();
 }

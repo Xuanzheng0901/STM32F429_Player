@@ -16,6 +16,8 @@ static struct test_queue queues[4];
 static unsigned queue_count, critical, selected, focused, elapsed, starts;
 uint32_t xTaskGetTickCount(void) { return starts * 997U + 123U; }
 static bool inject_browse, playing, allow_bad_track;
+static bool stall_ack, expect_stop_failure;
+static unsigned unmounts, stop_errors;
 static unsigned finishes;
 static bool select_on_finish;
 static void on_finished(uint32_t index) { (void)index; ++finishes; if(select_on_finish) player_request(5, true); }
@@ -54,6 +56,7 @@ QueueHandle_t xQueueCreate(unsigned length, unsigned size)
 int xQueueReceive(QueueHandle_t q, void *out, uint32_t timeout)
 {
     assert(!critical);
+    if(stall_ack && q == &queues[3]) return pdFALSE;
     if(!q->pending && timeout) SwitchToFiber(main_fiber);
     if(!q->pending) return pdFALSE;
     memcpy(out, q->data, q->size); q->pending = false; return pdTRUE;
@@ -87,8 +90,8 @@ void vTaskDelete(TaskHandle_t task) { DeleteFiber(((struct test_task *)task)->fi
 int xTaskNotify(TaskHandle_t task, uint32_t bits, eNotifyAction action)
 { assert(task == &tasks[0] && bits == AUDIO_CONTROL_EVENT && action == eSetBits); return pdTRUE; }
 
-FRESULT sdcard_mount_and_scan(void) { return FR_OK; }
-void sdcard_unmount(void) {}
+FRESULT sdcard_mount_and_scan(void) { assert(!queues[1].pending); return FR_OK; }
+void sdcard_unmount(void) { ++unmounts; }
 bool sdcard_is_removed(void) { return card_removed; }
 sdcard_event_t sdcard_poll(void) {
     static bool reported;
@@ -117,7 +120,7 @@ static bool on_window(const music_window_t *window, uint32_t index, bool select)
     if(select) selected = index;
     focused = index; return true;
 }
-static bool on_error(void) { assert(state == AUDIO_ERROR); return true; }
+static bool on_error(void) { if(expect_stop_failure) ++stop_errors; else assert(state == AUDIO_ERROR); return true; }
 static bool on_playback(uint32_t index, const music_info_t *info, uint32_t seconds, bool active)
 { assert(info); selected = index; selected_info = *info; elapsed = seconds; playing = active; return true; }
 
@@ -252,6 +255,23 @@ int main(int argc, char **argv)
     state = AUDIO_FINISHED; process_all(); assert(finishes == finished_before + 1);
     finished_before = finishes;
     state = AUDIO_ERROR; process_all(); assert(finishes == finished_before);
+    /* 停止超时不得卸载旧卷；迟到的旧确认不能替代本次停止确认。 */
+    player_toggle(); process_all(); assert(playing);
+    unsigned saved_unmounts = unmounts;
+    stall_ack = expect_stop_failure = true;
+    card_removed = true; card_event = SDCARD_REMOVED;
+    SwitchToFiber(tasks[1].fiber);
+    assert(unmounts == saved_unmounts && stop_errors == 1 && state == AUDIO_PLAYING);
+    stall_ack = expect_stop_failure = false;
+    SwitchToFiber(tasks[0].fiber); /* 旧确认现在才到达。 */
+    card_removed = false; card_event = SDCARD_INSERTED; process_all();
+    assert(state == AUDIO_STOPPED);
+    for(unsigned i = 0; i < 3; ++i) {
+        player_toggle(); process_all(); assert(playing);
+        card_removed = true; card_event = SDCARD_REMOVED; process_all();
+        card_removed = false; card_event = SDCARD_INSERTED; process_all();
+        assert(state == AUDIO_STOPPED);
+    }
 done:
     for(unsigned i = 0; i < 2; ++i) DeleteFiber(tasks[i].fiber);
     ConvertFiberToThread();

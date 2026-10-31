@@ -103,5 +103,6 @@ int main(void)
     mock_present = 0;
     assert(disk_status(0) == (STA_NOINIT | STA_NODISK));
     assert(disk_read(0, mock_sram, 0, 1) == RES_NOTRDY);
+    assert(mock_reset_calls == mock_init_calls && mock_deinit_calls + 1 == mock_init_calls);
     puts("SDIO init, DMA direct/bounce, block limits, callbacks and failure recovery passed");
 }

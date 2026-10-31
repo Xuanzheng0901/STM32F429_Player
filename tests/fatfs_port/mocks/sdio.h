@@ -7,7 +7,12 @@ extern uint8_t mock_sram[MOCK_SRAM_SIZE];
 #define SD_DMA_RAM_START ((uintptr_t)mock_sram)
 #define SD_DMA_RAM_END ((uintptr_t)mock_sram + sizeof(mock_sram))
 typedef enum { HAL_OK, HAL_ERROR } HAL_StatusTypeDef;
-typedef struct { unsigned unused; } SD_HandleTypeDef;
+typedef struct { unsigned State, ErrorCode; } SD_HandleTypeDef;
+#define HAL_SD_STATE_RESET 0
+void mock_sdio_reset(void);
+#define __HAL_RCC_SDIO_FORCE_RESET() mock_sdio_reset()
+#define __HAL_RCC_SDIO_RELEASE_RESET() ((void)0)
+HAL_StatusTypeDef HAL_SD_DeInit(SD_HandleTypeDef *handle);
 typedef struct { uint32_t LogBlockNbr; } HAL_SD_CardInfoTypeDef;
 extern SD_HandleTypeDef hsd;
 #define GPIO_PIN_RESET 0

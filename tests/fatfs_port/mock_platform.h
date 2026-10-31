@@ -8,6 +8,7 @@ void mock_detect_samples(unsigned samples);
 extern void (*mock_wait_hook)(void);
 extern void (*mock_dma_hook)(void);
 extern unsigned mock_task_calls;
+extern unsigned mock_deinit_calls, mock_reset_calls;
 extern unsigned mock_busy_reads, mock_post_dma_busy;
 extern unsigned mock_dma_calls, mock_max_blocks, mock_aborts, mock_init_calls, mock_wide_calls;
 extern void *mock_last_buffer;

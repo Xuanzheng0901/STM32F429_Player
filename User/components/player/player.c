@@ -48,11 +48,11 @@ static FRESULT update_window(uint32_t index, bool select, uint32_t total)
 }
 
 /* 关闭文件的确认是卸载卷的唯一同步点，不让 f_mount 与音频读文件并发。 */
-static void stop_audio(void)
+static bool stop_audio(void)
 {
     s_available = false;
-    playback_stop();
     xQueueReset(s_requests);
+    return playback_stop();
 }
 
 static void music_task(void *argument)
@@ -81,7 +81,11 @@ static void music_task(void *argument)
         if(event == SDCARD_REMOVED) {
             if(card_seen && s_callbacks.notice) s_callbacks.notice(PLAYER_CARD_REMOVED);
             card_seen = false;
-            stop_audio();
+            LOGI("SD", "waiting for audio stop");
+            if(!stop_audio()) {
+                if(s_callbacks.error) s_callbacks.error();
+                continue;
+            }
             sdcard_unmount();
             s_window.count = 0;
             s_window.first_index = s_window.total = 0;
@@ -91,7 +95,12 @@ static void music_task(void *argument)
         if(event == SDCARD_INSERTED) {
             card_seen = true;
             if(s_callbacks.notice) s_callbacks.notice(PLAYER_CARD_INSERTED);
-            stop_audio();
+            LOGI("SD", "waiting for audio stop");
+            if(!stop_audio()) {
+                if(s_callbacks.error) s_callbacks.error();
+                continue;
+            }
+            LOGI("SD", "audio stopped, mounting card");
             if(s_callbacks.media) s_callbacks.media(PLAYER_SCANNING);
             FRESULT result = sdcard_mount_and_scan();
             if(result == FR_OK) result = sdcard_load_music_window(0, &s_window);

@@ -34,8 +34,8 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 147,944 B | 24+40 KiB | 593,236 B |
-| Release | 147,936 B | 24+40 KiB | 534,404 B |
+| Debug | 147,944 B | 24+40 KiB | 595,004 B |
+| Release | 147,936 B | 24+40 KiB | 535,476 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 

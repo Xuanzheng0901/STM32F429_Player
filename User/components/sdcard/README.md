@@ -9,3 +9,5 @@ sdcard_mount_and_scan 重新建立介质会话、挂载并重建隐藏索引。�
 播放器收到拔卡事件后先禁止新控制，发出停止命令，等音频任务停止 I2S DMA、关闭当前 FIL 并确认，最后调用 sdcard_unmount。扫描期间拔卡，底层传输会退出，扫描自身关闭索引及目录；不在其他任务中强行卸载正在使用的卷。
 
 插卡失败不反复重试；重新拔插后再试。成功后只选中第一首，用户确认播放。
+
+插卡日志依次为 waiting for audio stop、audio stopped, mounting card、SDIO 初始化各阶段、mount result、rebuilding library、library ready。插入弹窗仅代表检测到卡，不代表已经停止旧音频或挂载成功。
