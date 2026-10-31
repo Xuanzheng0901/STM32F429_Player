@@ -57,6 +57,7 @@ const osThreadAttr_t defaultTask_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
+void app_main(void);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -117,11 +118,8 @@ void StartDefaultTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN StartDefaultTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
+  app_main();
+  vTaskDelete(NULL);
   /* USER CODE END StartDefaultTask */
 }
 

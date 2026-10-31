@@ -27,3 +27,6 @@ foreach(TEST diskio filesystem removal tags library)
     target_compile_options(${TEST} PRIVATE -Wall -Wextra -Werror -UNDEBUG)
     add_test(NAME ${TEST} COMMAND ${TEST})
 endforeach()
+
+add_test(NAME removal_paused COMMAND removal paused)
+add_test(NAME removal_quick COMMAND removal quick)

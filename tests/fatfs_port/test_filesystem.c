@@ -6,6 +6,13 @@
 #include <stdio.h>
 #include <string.h>
 
+/* 独立卷测试中没有音频文件；由调用方处理卸载事件。 */
+static void detect_samples(unsigned count)
+{
+    while(count--)
+        if(sdcard_poll() == SDCARD_REMOVED) sdcard_unmount();
+}
+
 int main(void)
 {
     const char volume[] = "0:";
@@ -93,29 +100,29 @@ int main(void)
     assert(info.fsize == 3 * MUSIC_PATH_CAPACITY);
     assert(sdcard_mount_and_scan() == FR_OK);
     assert(sdcard_load_music_window(0, &window) == FR_OK && window.total == 3);
-    assert(mock_task_calls == 1);
+    assert(mock_task_calls == 0);
     mock_present = 0;
-    mock_detect_samples(1);
+    detect_samples(1);
     mock_present = 1;
-    mock_detect_samples(1);
+    detect_samples(1);
     assert(!sdcard_is_removed());
     mock_present = 0;
-    mock_detect_samples(1);
-    mock_detect_samples(1);
-    mock_detect_samples(1);
+    detect_samples(1);
+    detect_samples(1);
+    detect_samples(1);
     assert(sdcard_is_removed());
-    mock_detect_samples(1);
+    detect_samples(1);
     assert(sdcard_load_music_window(0, &window) == FR_NOT_READY);
     assert(window.count == 0 && window.total == 0);
     sdcard_unmount();
     sdcard_unmount();
     mock_present = 1;
-    mock_detect_samples(1);
+    detect_samples(1);
     assert(sdcard_is_removed());
     assert(sdcard_load_music_window(0, &window) == FR_NOT_READY);
     assert(sdcard_mount_and_scan() == FR_OK && !sdcard_is_removed());
     assert(sdcard_load_music_window(0, &window) == FR_OK && window.total == 3);
-    assert(mock_task_calls == 1);
+    assert(mock_task_calls == 0);
     /* A transfer sees removal before the debounce task; a quick reinsert stays invalid. */
     assert(f_open(&file, wave_path, FA_READ) == FR_OK);
     mock_present = 0;
@@ -125,7 +132,7 @@ int main(void)
     assert(f_read(&file, target, 1, &read) == FR_INVALID_OBJECT);
     assert(mock_dma_calls == dma_before);
     assert(f_close(&file) == FR_INVALID_OBJECT);
-    mock_detect_samples(1);
+    detect_samples(1);
     assert(sdcard_is_removed());
     assert(f_stat("0:/music.idx", &info) == FR_NOT_ENABLED);
     sdcard_unmount();

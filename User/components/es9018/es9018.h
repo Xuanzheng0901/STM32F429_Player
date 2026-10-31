@@ -47,6 +47,7 @@ typedef enum
 
 // PCM I2S 从机、16 位槽宽、立体声、0 dB 并解除静音
 void ES9018_init(void);
+bool ES9018_is_locked(void);
 
 // 原始衰减值：-(volume / 2) dB
 void ES9018_set_volume(uint8_t volume);

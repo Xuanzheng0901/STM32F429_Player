@@ -40,6 +40,13 @@ static HAL_StatusTypeDef ES9018_update_register(uint8_t reg, uint8_t mask,
     return ES9018_write_reg(reg, (current & (uint8_t)~mask) | value); //将掩码位置零, 交给value修改
 }
 
+bool ES9018_is_locked(void)
+{
+    uint8_t status = 0;
+    return ES9018_read_reg(ES9018_REG_CHIP_STATUS, &status) == HAL_OK &&
+           (status & ES9018_STATUS_LOCK) != 0;
+}
+
 void ES9018_set_volume(uint8_t volume)
 {
     ES9018_write_reg(ES9018_REG_VOLUME_LEFT, volume);

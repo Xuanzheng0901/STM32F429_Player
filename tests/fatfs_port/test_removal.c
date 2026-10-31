@@ -7,137 +7,122 @@
 #include "../../User/components/player/player.c"
 
 static jmp_buf audio_exit, music_exit;
-static unsigned stopped, started, toggled, removing_events, removed_events, notified;
-static bool file_open, inject_controls = true;
-static audio_state_t state = AUDIO_PLAYING;
-static FIL audio_file;
-static FATFS *mounted_filesystem;
-static int callback_context;
+static unsigned windows, absent, starts, closes;
+static bool file_open, removed, paused_case, quick_case;
+static audio_state_t state;
+static FIL file;
 
 bool audio_player_start(music_info_t *info)
-{ (void)info; started++; return true; }
+{
+    assert(!file_open && !sdcard_is_removed());
+    assert(f_open(&file, info->path, FA_READ) == FR_OK);
+    file_open = true;
+    state = AUDIO_PLAYING;
+    ++starts;
+    return true;
+}
 void audio_player_stop(void)
 {
-    assert(file_open);
-    assert(f_close(&audio_file) == FR_INVALID_OBJECT);
-    file_open = false;
-    stopped++;
+    if(file_open) {
+        /* 卷必须保持有效，直到文件所有者完成关闭。 */
+        assert(file.obj.fs->fs_type != 0);
+        FRESULT result = f_close(&file);
+        assert(result == FR_OK || result == FR_INVALID_OBJECT);
+        file_open = false;
+        ++closes;
+    }
     state = AUDIO_STOPPED;
 }
-bool audio_player_toggle(void) { toggled++; return true; }
+bool audio_player_toggle(void)
+{
+    state = state == AUDIO_PLAYING ? AUDIO_PAUSED : AUDIO_PLAYING;
+    return true;
+}
 audio_state_t audio_player_state(void) { return state; }
 uint32_t audio_player_elapsed(void) { return 0; }
 audio_state_t audio_player_poll(uint32_t timeout)
 {
-    if(timeout)
-    {
-        if(inject_controls)
-        {
-            inject_controls = false;
-            player_toggle_playback();
-            player_set_repeat_one(true);
-            player_request_track(0, true);
-            assert(!s_audio_command_queue->count && !s_browse_request_queue->count);
+    if(!timeout) return state;
+    if(s_available && windows == 1 && !removed) {
+        if(state == AUDIO_STOPPED) {
+            player_toggle();
             return state;
         }
-        longjmp(audio_exit, 1);
-    }
-    return state;
-}
-static void run_audio(void)
-{
-    mock_wait_hook = NULL;
-    if(setjmp(audio_exit) == 0)
-        player_audio_task(NULL);
-}
-static void observed_event(sdcard_event_t event, void *context)
-{
-    assert(context == &callback_context);
-    if(event == SDCARD_EVENT_REMOVING)
-    {
-        assert(mounted_filesystem->fs_type != 0 && file_open);
+        if(paused_case && state == AUDIO_PLAYING) {
+            player_toggle();
+            return state;
+        }
+        assert(file_open);
+        removed = true;
+        mock_present = 0;
         assert(sdcard_is_removed());
-        removing_events++;
-        mock_wait_hook = run_audio;
+        if(quick_case) mock_present = 1;
+        return state;
     }
-    else
-    {
-        assert(mounted_filesystem->fs_type == 0 && !file_open && stopped == 1);
-        removed_events++;
-    }
-    player_handle_sd_event(event, NULL);
+    longjmp(audio_exit, 1);
 }
-static void remove_card(void)
+static void schedule(void)
 {
-    mock_wait_hook = NULL;
-    mock_present = 0;
-    mock_detect_samples(3);
+    if(setjmp(audio_exit) == 0) audio_task(NULL);
+}
+static void observed_media(player_media_t media)
+{
+    if(media != PLAYER_NO_CARD) return;
+    ++absent;
+    FILINFO info;
+    assert(f_stat("0:/track.wav", &info) == FR_NOT_ENABLED);
+    assert(!file_open && !s_available);
+    player_toggle();
+    player_set_repeat(true);
+    player_request(0, true);
+    assert(!s_commands->count && !s_requests->count);
+    mock_present = 1;
 }
 static bool window_changed(const music_window_t *window, uint32_t index, bool initial)
 {
-    (void)index; (void)initial;
-    if(window->count)
-    {
-        DWORD free_clusters;
-        assert(f_getfree("0:", &free_clusters, &mounted_filesystem) == FR_OK);
-        assert(f_open(&audio_file, window->items[0].path, FA_READ) == FR_OK);
-        file_open = true;
-    }
-    else
-    {
-        assert(removed_events == 1 && window->total == 0);
-        notified++;
+    assert(window->count == 1 && index == 0 && initial);
+    if(++windows == 2) {
+        assert(absent == 2 && starts == 1 && closes == 1);
+        assert(!file_open && state == AUDIO_STOPPED);
+        longjmp(music_exit, 1);
     }
     return true;
 }
 static bool playback_changed(uint32_t index, const music_info_t *info, uint32_t elapsed, bool playing)
 {
-    (void)index;
-    assert(removed_events == 1 && !playing && elapsed == 0 && info->path[0] == 0);
-    notified++;
+    (void)index; (void)info; (void)elapsed; (void)playing;
     return true;
 }
-static bool failed(void)
+static bool failed(void) { assert(!"unexpected media error"); return false; }
+
+int main(int argc, char **argv)
 {
-    assert(removed_events == 1 && notified == 2);
-    longjmp(music_exit, 1);
-}
-int main(void)
-{
+    paused_case = argc > 1 && strcmp(argv[1], "paused") == 0;
+    quick_case = argc > 1 && strcmp(argv[1], "quick") == 0;
     uint8_t work[4096];
+    FATFS filesystem;
     MKFS_PARM options = {.fmt = FM_FAT, .au_size = 512};
-    FATFS setup_filesystem;
     assert(f_mkfs("0:", &options, work, sizeof(work)) == FR_OK);
-    assert(f_mount(&setup_filesystem, "0:/", 1) == FR_OK);
-    FIL file;
-    assert(f_open(&file, "0:/test.wav", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK);
-    assert(f_close(&file) == FR_OK);
-    assert(f_mount(NULL, "0:/", 0) == FR_OK);
-    s_audio_command_queue = xQueueCreate(1, sizeof(audio_command_t));
-    s_playback_status_queue = xQueueCreate(1, sizeof(audio_status_t));
-    s_browse_request_queue = xQueueCreate(1, sizeof(browse_request_t));
-    s_audio_stop_ack_queue = xQueueCreate(1, sizeof(bool));
-    s_audio_task_handle = (void *)1;
-    s_ui_callbacks = (player_callbacks_t){window_changed, playback_changed, failed};
-    sdcard_set_event_callback(observed_event, &callback_context);
-    mock_wait_hook = remove_card;
-    if(setjmp(music_exit) == 0)
-        player_library_task(NULL);
-    assert(stopped == 1 && started == 0 && toggled == 0 && !file_open);
-    assert(s_audio_stop_ack_queue->count == 0);
-    assert(removing_events == 1 && removed_events == 1 && mounted_filesystem->fs_type == 0);
+    assert(f_mount(&filesystem, "0:", 1) == FR_OK);
+    FIL setup;
+    assert(f_open(&setup, "0:/track.wav", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK);
+    assert(f_close(&setup) == FR_OK);
+    assert(f_mount(NULL, "0:", 0) == FR_OK);
+
+    s_requests = xQueueCreate(1, sizeof(music_request_t));
+    s_commands = xQueueCreate(1, sizeof(audio_command_t));
+    s_status = xQueueCreate(1, sizeof(audio_status_t));
+    s_stop_ack = xQueueCreate(1, sizeof(bool));
+    s_audio_task = (void *)1;
+    s_callbacks = (player_callbacks_t){window_changed, playback_changed, failed, observed_media};
+    mock_present = 0;
+    mock_wait_hook = schedule;
+    if(setjmp(music_exit) == 0) music_task(NULL);
     sdcard_unmount();
-    mock_detect_samples(3);
-    assert(removing_events == 1 && removed_events == 1);
-    mock_present = 1;
-    mock_detect_samples(3);
-    assert(mounted_filesystem->fs_type == 0 && sdcard_is_removed());
-    sdcard_set_event_callback(NULL, NULL);
-    assert(sdcard_mount_and_scan() == FR_OK);
-    assert(f_mount(NULL, "0:/", 0) == FR_OK);
-    vQueueDelete(s_audio_command_queue);
-    vQueueDelete(s_playback_status_queue);
-    vQueueDelete(s_browse_request_queue);
-    vQueueDelete(s_audio_stop_ack_queue);
-    puts("diskio -> sdcard events -> player stop acknowledgement -> sdcard unmount -> UI passed");
+    assert(!s_stop_ack->count);
+    vQueueDelete(s_requests);
+    vQueueDelete(s_commands);
+    vQueueDelete(s_status);
+    vQueueDelete(s_stop_ack);
+    puts("absent boot -> insert -> play/pause -> remove -> close -> unmount -> reinsert passed");
 }
