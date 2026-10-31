@@ -1,5 +1,7 @@
 # 播放器
 
+本模块包含播放控制与解码、曲库扫描和标签解析。music_library.c 管理隐藏路径索引和 15 首窗口，music_tags.c 解析 ID3、WAV INFO 和 FLAC Vorbis Comment；各文件保留独立职责，共享 music.h。
+
 app_main 初始化日志、SSD1685 UI、ES9018K2M，再启动播放器。共享歌曲结构在 music.h，路径为 FatFs R0.16 UTF-8；UI 通过 player_request、player_toggle、player_set_repeat 发命令，播放器通过回调发布曲库窗口、播放状态和介质状态。
 
 - music 任务：优先级 1、16 KiB 栈。每 20 ms 采样卡检测，负责挂载、扫描、15 首窗口及 UI 通知。
