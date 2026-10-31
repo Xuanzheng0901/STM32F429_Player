@@ -407,8 +407,11 @@ int main(int argc, char **argv)
         lv_obj_t *obj = lv_obj_get_child(lv_screen_active(), i);
         if(lv_obj_check_type(obj, &lv_image_class) && lv_image_get_src(obj) == &music_player_repeat) {
             lv_obj_send_event(obj, LV_EVENT_CLICKED, NULL); assert(requested_mode == PLAYER_REPEAT_ONE);
+            assert(lv_image_get_src(obj) == &music_player_repeat_one);
             lv_obj_send_event(obj, LV_EVENT_CLICKED, NULL); assert(requested_mode == PLAYER_SHUFFLE);
+            assert(lv_image_get_src(obj) == &music_player_shuffle);
             lv_obj_send_event(obj, LV_EVENT_CLICKED, NULL); assert(requested_mode == PLAYER_PLAY_LIST);
+            assert(lv_image_get_src(obj) == &music_player_repeat);
         }
     }
     (void)requested_repeat;

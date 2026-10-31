@@ -28,7 +28,7 @@ static lv_obj_t *list_count_label;
 static lv_obj_t *title_label, *artist_label, *album_label, *status_label, *index_label;
 static lv_obj_t *format_label, *audio_label;
 static lv_obj_t *elapsed_label, *duration_label, *progress_fill, *progress_knob;
-static lv_obj_t *play_icon, *repeat_label;
+static lv_obj_t *play_icon;
 static lv_obj_t *control_buttons[5];
 static uint32_t current_track;
 static uint32_t elapsed;
@@ -141,7 +141,8 @@ static void ui_update(void)
     lv_obj_set_width(progress_fill, x - PLAYER_PROGRESS_X + 1);
     lv_obj_set_x(progress_knob, x - 2);
     lv_image_set_src(play_icon, (usb_mode ? usb_playing : playing) ? &music_player_pause : &music_player_play);
-    lv_label_set_text_static(repeat_label, play_mode == PLAYER_REPEAT_ONE ? "1" : play_mode == PLAYER_SHUFFLE ? "R" : "L");
+    lv_image_set_src(control_buttons[0], play_mode == PLAYER_REPEAT_ONE ? &music_player_repeat_one :
+                     play_mode == PLAYER_SHUFFLE ? &music_player_shuffle : &music_player_repeat);
     ui_update_markers();
 }
 
@@ -431,7 +432,6 @@ void UI_init(void)
         lv_obj_add_flag(control, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(control, ui_action, LV_EVENT_CLICKED, (void *)i);
     }
-    repeat_label = ui_label(screen, "1", small, 152, 15, 6, 11, LV_TEXT_ALIGN_CENTER, false);
     ui_block(screen, 143, 43, 206, 1, false);
 
     /* 列表焦点反白，播放标记独立于焦点；按下选曲后才切换歌曲。 */
