@@ -25,6 +25,8 @@ Windows 使用 MinGW GCC。先把编译器 bin 目录加入当前进程 PATH；�
 | display_port | 5 | 全刷/快刷/局刷、编码器回绕、日志 |
 | heap_budget | 1 | 40 KiB RTOS 堆启动峰值、swdraw 线程、Idle 回收前挂载与反复重挂载 |
 
+UI 测试按新布局检查左侧高亮边缘、浏览时右侧播放器像素不变及控件边界。64 位主机使用 32 KiB LVGL 堆，固件保持 24 KiB。需要检查实际绘制结果时，运行 `build/ui-tests/music_ui.exe build/ui-tests/layout.pbm`，可导出 360×184 的黑白预览。
+
 当前共 43 项通过。音频夹具沿用 F407 工程生成的 FAT32 镜像及独立 FFmpeg PCM 参考；生成程序已迁入本工程，测试全部链接当前 F429 的应用及 FatFs 代码。主机 HAL/RTOS 为模拟接口，不是板上音频、真实热插拔时序、电气或吞吐证据。
 
 堆预算测试使用生产 heap_4 分配器，运行命令和边界见 [heap_budget](heap_budget/README.md)。

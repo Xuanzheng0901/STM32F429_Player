@@ -12,6 +12,8 @@
 
 #define PLAYER_TRACK_COUNT 5U
 #define PLAYER_TRACK_CENTER (PLAYER_TRACK_COUNT / 2)
+#define PLAYER_PROGRESS_X 143
+#define PLAYER_PROGRESS_WIDTH 205
 static music_info_t current_info;
 static uint32_t total_tracks, list_focus;
 static int64_t list_first;
@@ -125,8 +127,9 @@ static void ui_update(void)
     if(duration && elapsed > duration) elapsed = duration;
     ui_time(elapsed_label, elapsed);
     ui_time(duration_label, duration);
-    const int32_t x = 12 + (duration ? (int32_t)(((uint64_t)204 * elapsed + duration / 2) / duration) : 0);
-    lv_obj_set_width(progress_fill, x - 12 + 1);
+    const int32_t x = PLAYER_PROGRESS_X + (duration ?
+        (int32_t)(((uint64_t)(PLAYER_PROGRESS_WIDTH - 1) * elapsed + duration / 2) / duration) : 0);
+    lv_obj_set_width(progress_fill, x - PLAYER_PROGRESS_X + 1);
     lv_obj_set_x(progress_knob, x - 2);
     lv_image_set_src(play_icon, playing ? &music_player_pause : &music_player_play);
     if(repeat_one) lv_obj_remove_flag(repeat_label, LV_OBJ_FLAG_HIDDEN);
@@ -190,7 +193,7 @@ bool UI_set_music_window(const music_window_t *window, uint32_t index, bool sele
     if(total_tracks) lv_group_focus_obj(track_rows[PLAYER_TRACK_CENTER]);
     /* 编码器发送左右键改变歌曲索引，不在控件之间跳转。focus_obj 会清除编辑状态。 */
     lv_group_set_editing(player_group, true);
-    /* 浏览焦点只更新右侧列表，按下确认才修改左侧播放器。 */
+    /* 浏览焦点只更新左侧列表，按下确认才修改右侧播放器。 */
     if(update_player) ui_update();
     else ui_update_markers();
     lvgl_port_unlock();
@@ -332,57 +335,57 @@ void UI_init(void)
     player_group = lv_group_create();
     lv_group_set_wrap(player_group, false);
 
-    /* 顶部状态栏；MUSIC 保留普通文字，不加底框。 */
-    ui_label(screen, "MUSIC", small, 12, 5, 46, 17, LV_TEXT_ALIGN_LEFT, false);
-    status_label = ui_label(screen, "已暂停", small, 67, 5, 48, 17, LV_TEXT_ALIGN_CENTER, false);
-    index_label = ui_label(screen, "0 / 0", small, 129, 5, 72, 17, LV_TEXT_ALIGN_LEFT, false);
-    ui_label(screen, "--", small, 293, 5, 18, 17, LV_TEXT_ALIGN_CENTER, false);
-    ui_block(screen, 319, 8, 26, 11, false);
-    ui_block(screen, 320, 9, 24, 9, true);
-    ui_block(screen, 322, 11, 20, 5, false);
-    ui_block(screen, 345, 11, 3, 5, false);
-    ui_block(screen, 12, 26, 336, 1, false);
+    /* 底部状态栏；MUSIC 保留普通文字，不加底框。 */
+    ui_label(screen, "MUSIC", small, 12, 163, 46, 17, LV_TEXT_ALIGN_LEFT, false);
+    status_label = ui_label(screen, "已暂停", small, 67, 163, 48, 17, LV_TEXT_ALIGN_CENTER, false);
+    index_label = ui_label(screen, "0 / 0", small, 129, 163, 72, 17, LV_TEXT_ALIGN_LEFT, false);
+    ui_label(screen, "--", small, 293, 163, 18, 17, LV_TEXT_ALIGN_CENTER, false);
+    ui_block(screen, 319, 166, 26, 11, false);
+    ui_block(screen, 320, 167, 24, 9, true);
+    ui_block(screen, 322, 169, 20, 5, false);
+    ui_block(screen, 345, 169, 3, 5, false);
+    ui_block(screen, 12, 157, 336, 1, false);
 
     /* 后台索引完成后填入歌曲信息，不启动音频播放。 */
-    ui_image(screen, &music_player_record, 14, 35);
-    title_label = ui_label(screen, "", &fusion_pixel_12_cjk, 112, 35, 108, 22, LV_TEXT_ALIGN_LEFT, false);
-    artist_label = ui_label(screen, "", small, 112, 65, 108, 11, LV_TEXT_ALIGN_LEFT, false);
-    album_label = ui_label(screen, "", small, 112, 83, 108, 11, LV_TEXT_ALIGN_LEFT, false);
-    ui_block(screen, 112, 103, 30, 13, false);
-    format_label = ui_label(screen, "--", small, 112, 103, 30, 13, LV_TEXT_ALIGN_CENTER, true);
-    audio_label = ui_label(screen, "--", small, 151, 103, 69, 13, LV_TEXT_ALIGN_LEFT, false);
+    ui_image(screen, &music_player_record, 143, 53);
+    title_label = ui_label(screen, "", small, 224, 52, 124, 22, LV_TEXT_ALIGN_LEFT, false);
+    artist_label = ui_label(screen, "", small, 224, 77, 124, 11, LV_TEXT_ALIGN_LEFT, false);
+    album_label = ui_label(screen, "", small, 224, 95, 124, 11, LV_TEXT_ALIGN_LEFT, false);
+    ui_block(screen, 224, 113, 30, 13, false);
+    format_label = ui_label(screen, "--", small, 224, 113, 30, 13, LV_TEXT_ALIGN_CENTER, true);
+    audio_label = ui_label(screen, "--", small, 262, 113, 86, 13, LV_TEXT_ALIGN_LEFT, false);
 
-    const int32_t progress_x = 12;
-    ui_block(screen, 12, 129, 205, 1, false);
-    progress_fill = ui_block(screen, 12, 128, progress_x - 12 + 1, 3, false);
-    progress_knob = ui_block(screen, progress_x - 2, 126, 5, 7, false);
-    elapsed_label = ui_label(screen, "00:00", small, 12, 136, 48, 11, LV_TEXT_ALIGN_LEFT, false);
-    duration_label = ui_label(screen, "00:00", small, 169, 136, 48, 11, LV_TEXT_ALIGN_RIGHT, false);
+    ui_block(screen, PLAYER_PROGRESS_X, 134, PLAYER_PROGRESS_WIDTH, 1, false);
+    progress_fill = ui_block(screen, PLAYER_PROGRESS_X, 133, 1, 3, false);
+    progress_knob = ui_block(screen, PLAYER_PROGRESS_X - 2, 131, 5, 7, false);
+    elapsed_label = ui_label(screen, "00:00", small, 143, 142, 60, 11, LV_TEXT_ALIGN_LEFT, false);
+    duration_label = ui_label(screen, "00:00", small, 288, 142, 60, 11, LV_TEXT_ALIGN_RIGHT, false);
 
-    /* 左侧控制图标中心为 (22/68/114/160/206, 165)，等距 46 px。 */
+    /* 右上方五个图标中心为 (154/200/246/292/338, 21)，等距 46 px。 */
     const lv_image_dsc_t *const controls[] = {
         &music_player_repeat, &music_player_previous, &music_player_pause,
         &music_player_next, &music_player_list,
     };
     for(uintptr_t i = 0; i < 5; i++)
     {
-        const int32_t x = i == 2 ? 99 : 12 + (int32_t)i * 46;
-        lv_obj_t *control = ui_image(screen, controls[i], x, i == 2 ? 150 : 155);
+        const int32_t x = i == 2 ? 231 : 144 + (int32_t)i * 46;
+        lv_obj_t *control = ui_image(screen, controls[i], x, i == 2 ? 6 : 11);
         if(i == 2) play_icon = control;
         lv_obj_add_flag(control, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(control, ui_action, LV_EVENT_CLICKED, (void *)i);
     }
-    repeat_label = ui_label(screen, "1", small, 20, 159, 6, 11, LV_TEXT_ALIGN_CENTER, false);
+    repeat_label = ui_label(screen, "1", small, 152, 15, 6, 11, LV_TEXT_ALIGN_CENTER, false);
+    ui_block(screen, 143, 43, 206, 1, false);
 
     /* 列表焦点反白，播放标记独立于焦点；按下选曲后才切换歌曲。 */
-    ui_block(screen, 229, 35, 1, 142, false);
-    ui_label(screen, "音乐列表", small, 240, 35, 72, 11, LV_TEXT_ALIGN_LEFT, false);
-    list_count_label = ui_label(screen, "0", small, 312, 35, 36, 11, LV_TEXT_ALIGN_RIGHT, false);
-    ui_block(screen, 240, 49, 108, 1, false);
+    ui_block(screen, 130, 8, 1, 142, false);
+    ui_label(screen, "音乐列表", small, 12, 8, 72, 11, LV_TEXT_ALIGN_LEFT, false);
+    list_count_label = ui_label(screen, "0", small, 84, 8, 36, 11, LV_TEXT_ALIGN_RIGHT, false);
+    ui_block(screen, 12, 22, 108, 1, false);
     for(uintptr_t i = 0; i < PLAYER_TRACK_COUNT; i++)
     {
-        const int32_t y = 54 + (int32_t)i * 24;
-        lv_obj_t *row = ui_block(screen, 238, y, 110, 23, false);
+        const int32_t y = 27 + (int32_t)i * 24;
+        lv_obj_t *row = ui_block(screen, 10, y, 110, 23, false);
         track_rows[i] = row;
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);

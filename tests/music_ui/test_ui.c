@@ -26,7 +26,8 @@ static uint8_t frame[DISP_BUF_SIZE];
 static lv_indev_t *test_encoder;
 static int32_t encoder_delta;
 static bool encoder_pressed;
-static uint8_t player_pixels[184][28];
+/* 歌曲信息现在位于右侧；只比较底栏上方 x=136..359 的整字节区域。 */
+static uint8_t player_pixels[157][28];
 
 bool lvgl_port_lock(uint32_t timeout) { (void)timeout; assert(!locked); locked = true; return true; }
 void lvgl_port_unlock(void) { assert(locked); locked = false; }
@@ -98,13 +99,13 @@ static void process_request(void)
 static void save_player_pixels(void)
 {
     lv_refr_now(NULL);
-    for(unsigned y = 0; y < 184; ++y) memcpy(player_pixels[y], frame + 8 + y * 45, 28);
+    for(unsigned y = 0; y < 157; ++y) memcpy(player_pixels[y], frame + 8 + y * 45 + 17, 28);
 }
 
 static void check_player_pixels(void)
 {
     lv_refr_now(NULL);
-    for(unsigned y = 0; y < 184; ++y) assert(!memcmp(player_pixels[y], frame + 8 + y * 45, 28));
+    for(unsigned y = 0; y < 157; ++y) assert(!memcmp(player_pixels[y], frame + 8 + y * 45 + 17, 28));
 }
 
 static void check_highlight(void)
@@ -112,9 +113,11 @@ static void check_highlight(void)
     lv_refr_now(NULL);
     lv_obj_t *focus = lv_group_get_focused(player_group);
     for(unsigned row = 0; row < PLAYER_TRACK_COUNT; ++row) {
+        lv_area_t bounds;
+        lv_obj_get_coords(track_rows[row], &bounds);
         for(unsigned edge = 0; edge < 2; ++edge) {
-            unsigned y = 54 + row * 24 + (edge ? 21 : 1);
-            for(unsigned x = 238; x < 348; ++x) {
+            unsigned y = bounds.y1 + (edge ? 21 : 1);
+            for(unsigned x = bounds.x1; x <= (unsigned)bounds.x2; ++x) {
                 bool white = (frame[8 + y * 45 + x / 8] & (0x80U >> (x % 8))) != 0;
                 if(white != (focus != track_rows[row])) {
                     fprintf(stderr, "broken highlight row=%u x=%u y=%u white=%d focus=%d\n",
@@ -144,9 +147,54 @@ static void check_window(uint32_t index, uint32_t total)
     check_highlight();
 }
 
-int main(void)
+static void check_bounds(lv_obj_t *parent)
+{
+    for(uint32_t i = 0; i < lv_obj_get_child_count(parent); ++i) {
+        lv_obj_t *child = lv_obj_get_child(parent, i);
+        lv_area_t bounds;
+        lv_obj_get_coords(child, &bounds);
+        assert(bounds.x1 >= 0 && bounds.y1 >= 0);
+        assert(bounds.x2 < DISP_HOR_RES && bounds.y2 < DISP_VER_RES);
+        check_bounds(child);
+    }
+}
+
+/* 导出实际 UI.c 绘制的 I1 帧，用于电脑端检查布局。 */
+static void save_preview(const char *path)
+{
+    const char *titles[] = {"晴天", "七里香", "夜曲", "稻香", "花海"};
+    const music_type_t types[] = {MUSIC_FLAC, MUSIC_WAV, MUSIC_FLAC, MUSIC_MP3, MUSIC_FLAC};
+    window = (music_window_t){.total = 5, .count = 5};
+    for(unsigned i = 0; i < 5; ++i) {
+        strcpy(window.items[i].title, titles[i]);
+        window.items[i].type = types[i];
+    }
+    music_info_t *info = &window.items[2];
+    strcpy(info->artist, "周杰伦");
+    strcpy(info->album, "十一月的萧邦");
+    info->sample_rate_hz = 44100;
+    info->bits_per_sample = 16;
+    info->duration_seconds = 226;
+    assert(UI_set_music_window(&window, 2, true));
+    assert(UI_set_player_status(2, info, 84, true));
+    lv_refr_now(NULL);
+    check_bounds(lv_screen_active());
+    FILE *file = fopen(path, "wb");
+    assert(file);
+    fprintf(file, "P4\n%d %d\n", DISP_HOR_RES, DISP_VER_RES);
+    /* PBM 的 1 表示黑色，与 LVGL I1 的黑白位含义相反。 */
+    for(size_t i = 8; i < sizeof(frame); ++i) assert(fputc(frame[i] ^ 0xff, file) != EOF);
+    assert(fclose(file) == 0);
+}
+
+int main(int argc, char **argv)
 {
     UI_init();
+    if(argc == 2) {
+        save_preview(argv[1]);
+        return 0;
+    }
+    check_bounds(lv_screen_active());
     assert(!strcmp(lv_label_get_text(status_label), "未插卡"));
     assert(UI_set_music_error());
     assert(!strcmp(lv_label_get_text(title_label), "加载失败"));
@@ -325,6 +373,7 @@ int main(void)
     assert(total_tracks == 1 && !playing && current_track == 0);
     (void)requested_repeat;
     lv_refr_now(NULL);
+    check_bounds(lv_screen_active());
     puts("PASS: fixed center, boundaries, rapid asynchronous navigation and confirmation; browsing preserves player; scrolling and highlight edges intact");
     return 0;
 }

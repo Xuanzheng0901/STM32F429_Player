@@ -4,6 +4,8 @@ enable_testing()
 get_filename_component(REPO "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(PORT "${REPO}/User/components/display/lvgl_port")
 file(READ "${PORT}/lv_conf.h" CONFIG)
+# 64 位主机对象含更宽的指针；固件仍使用 24 KiB LVGL 堆。
+string(REPLACE "LV_MEM_SIZE (24 * 1024U)" "LV_MEM_SIZE (32 * 1024U)" CONFIG "${CONFIG}")
 string(REPLACE "LV_USE_OS   LV_OS_FREERTOS" "LV_USE_OS   LV_OS_NONE" CONFIG "${CONFIG}")
 string(REPLACE "LV_ASSERT_HANDLER while(1);" "LV_ASSERT_HANDLER abort();" CONFIG "${CONFIG}")
 string(REPLACE "LV_ASSERT_HANDLER_INCLUDE <stdint.h>" "LV_ASSERT_HANDLER_INCLUDE <stdlib.h>" CONFIG "${CONFIG}")

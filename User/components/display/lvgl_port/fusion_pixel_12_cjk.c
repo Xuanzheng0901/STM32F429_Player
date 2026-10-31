@@ -28362,4 +28362,3 @@ lv_font_t fusion_pixel_12_cjk = {
 
 
 #endif /*#if FUSION_PIXEL_12_CJK*/
-
