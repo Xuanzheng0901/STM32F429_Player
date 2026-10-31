@@ -13,11 +13,16 @@ LVGL 内部的 swdraw 线程保留 16 KiB 栈，不能只统计 music/audio/LVGL
 - 音频结束后停止；开启单曲循环则重播。上下首环绕切换，列表浏览不更改当前曲目，按编码器确认选曲；启动和重新插卡只选第一首，不自动播放。
 - 起播先发送零数据并等待 DAC 锁定，锁定后补入歌曲开头。DMA 超时、补数迟到、文件错误会停止并关闭文件；保留必要的文件边界和 DMA 相位判断。
 
-LVGL 内部的 swdraw 线程保留 16 KiB 栈，不能只统计 music/audio/LVGL/log 四个应用任务。入口和曲库挂载完成后打印 RTOS 堆的当前及历史最小余量；启动任务被删除后，栈和 TCB 仍要等 Idle 运行才回收。
-
-
 拔卡后，SDIO 锁存当前介质失效，快速重插也不能复用旧文件。音频任务停止 DMA 并关闭文件，music 任务等待停止确认后再卸载卷、清空队列和 UI。连续三次检测有卡后重新挂载、扫描；失败显示加载失败，重新插卡可再试，不做后台反复挂载。
 
-硬件：I2S2 PB12/PB13/PB15，DAC I2C2 PB10/PB11；编码器 TIM3 PB4/PB5，确认键 PB3，卡检测 PA15 低有效。入口将 PD9 MAX97220_MUTE 拉高启用耳放，实际耳放电路的使能极性需板上确认。未实现电量采样，UI 显示 --。
+硬件：I2S2 PB12/PB13/PB15，DAC I2C2 PB10/PB11；编码器 TIM3 PB4/PB5，确认键 PB3，卡检测 PA15 低有效。PB14 EAR_DET 低电平表示插入；PD9 MAX97220_MUTE 低电平静音、高电平启用。耳机拔出由 EXTI14 立即静音，音频任务做 30 ms 消抖；仅耳机已插入且音源正在播放时启用耳放。未实现电量采样，UI 显示 --。
 
-构建：cmake --preset Debug，然后 cmake --build --preset Debug -j 8；Release 同理。主机测试见 tests/audio_player、tests/fatfs_port 和 tests/music_ui。主机验证不能代替板上 SDIO 吞吐、插拔时序、显示及音频输出验证。
+构建：cmake --preset Debug，然后 cmake --build --preset Debug -j 8；Release 同理。主机测试见 tests/audio_player、tests/audio_io、tests/player_control、tests/fatfs_port 和 tests/music_ui。主机验证不能代替板上 SDIO 吞吐、插拔时序、显示及音频输出验证。
+
+USB 音频由 usb_audio.c 负责，USB ISR 只写入 PCM FIFO、记录主机活动及流/静音状态；audio_dma.c 分派 I2S2 的半满、全满和错误回调，audio_output.c 管理耳机与耳放。I2S2 启停和 DAC 格式仍只由 audio 任务操作。
+
+收到主机复位或 SOF 后切到 USB 模式，先静音并停止 SD 播放、关闭文件，再建立 USB I2S 输出；USB 模式下屏蔽 SD 播放控制。SD 卡仍可插拔、挂载和扫描，卡卸载的停止确认不影响 USB DMA。连续 500 ms 没有主机活动或收到断开回调后退出；无 VBUS 检测时主机挂起也会按断开处理。退出后从当前曲库窗口选一首并保持暂停，不自动恢复播放。
+
+USB 描述符固定为 UAC1、48 kHz、16 位、双声道，adaptive OUT，不声明反馈端点。每包直接写 FIFO，缓冲为 2048 帧 FIFO（8192 B）和两个 192 帧 DMA 半缓冲（共 1536 B），启动等待 DAC 锁定和至少 384 帧数据；欠载补零并重新预缓冲。FIFO 积压时每次补数丢一帧补偿晶振漂移，此路径不保证逐样本无损。原 ST 类驱动大环形缓冲改为收包暂存（768 B），不再让短包累计偏移越界。USB 主机静音命令同时门控 PCM 和耳放。
+
+未新增 RTOS 任务、动态队列或 RTOS 定时器；事件通过静态环形队列交给 music 任务，UI 使用 LVGL 定时器依次显示三秒的卡、USB 和耳机通知。耳机物理静音不等待 UI 通知。

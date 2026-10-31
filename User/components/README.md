@@ -26,14 +26,14 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
     cmake --preset Release
     cmake --build --preset Release -j 8
 
-构建输出为 build/Debug 或 build/Release 中的 F429_Player_remake.elf。所有用户组件输出 .su 栈报告；Debug 已避免整块 music_window_t 清零引入约 17 KiB 的栈临时量。audio_task 自身栈帧 2400 B，music_task 1224 B；这不是完整调用链的最高栈占用。
+构建输出为 build/Debug 或 build/Release 中的 F429_Player_remake.elf。所有用户组件输出 .su 栈报告；Debug 已避免整块 music_window_t 清零引入约 17 KiB 的栈临时量。audio_task 自身栈帧 2408 B，music_task 1232 B；这不是完整调用链的最高栈占用。
 
 当前链接结果：
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 152,056 B | 24+40 KiB | 591,780 B |
-| Release | 152,040 B | 24+40 KiB | 532,416 B |
+| Debug | 147,296 B | 24+40 KiB | 595,528 B |
+| Release | 147,280 B | 24+40 KiB | 535,128 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
@@ -42,3 +42,8 @@ Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不�
 FreeRTOS 动态堆中的长期任务栈合计 29 KiB，包含 audio 8 KiB、LVGL 管理 4 KiB、日志 1 KiB 和内部 swdraw 绘制线程 16 KiB；不能漏计最后一项。启动任务另占 4 KiB，删除后等 Idle 回收。当前分配预算见 [heap_budget](../../tests/heap_budget/README.md)，板上通过启动和挂载后的 RTOS heap free/min 日志核对。
 
 主机验证见 [测试说明](../../tests/README.md)。实际卡座插拔、SDIO 吞吐、DAC/耳放输出和墨水屏效果仍需上板验证。
+
+
+UI 对插拔 SD 卡、USB 主机连接/断开、耳机插拔依次显示三秒提示。USB 收到主机复位或 SOF 时独占 I2S2，固定 48 kHz/16 位双声道；连续 500 ms 无总线活动退出，主机挂起也按断开处理。SD 卡可在 USB 模式继续挂载/卸载，不能抢占音频输出；退出 USB 后选曲保持暂停。PB14 低电平插入，PD9 低电平静音，拔出由 EXTI14 立即静音，插入消抖 30 ms。实现和缓冲策略见 [播放器说明](player/README.md)。
+
+本次未增加 RTOS 动态分配。USB FIFO 为 8192 B、DMA 为 1536 B，均在普通 SRAM；ST USB 类缓冲由 15360 B 缩至 768 B。Release 普通 SRAM 剩余 49328 B，较此前增加 4760 B。
