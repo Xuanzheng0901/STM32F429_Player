@@ -21,6 +21,7 @@ static bool locked, pending, request_select;
 static uint32_t request_index;
 static unsigned toggles;
 static bool requested_repeat;
+static player_mode_t requested_mode;
 static music_window_t window;
 static uint8_t frame[DISP_BUF_SIZE];
 static lv_indev_t *test_encoder;
@@ -67,7 +68,7 @@ lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *config)
 void player_request(uint32_t index, bool select)
 { assert(!locked); request_index = index; request_select = select; pending = true; }
 void player_toggle(void) { assert(!locked); ++toggles; }
-void player_set_repeat(bool repeat) { assert(!locked); requested_repeat = repeat; }
+void player_set_mode(player_mode_t mode) { assert(!locked); requested_repeat = mode == PLAYER_REPEAT_ONE; requested_mode = mode; }
 
 static void publish(uint32_t index, uint32_t total, bool select)
 {
@@ -397,6 +398,16 @@ int main(int argc, char **argv)
     assert(!strcmp(lv_label_get_text(title_label), "USB Audio"));
     UI_set_usb_status(false, false);
     assert(!strcmp(lv_label_get_text(title_label), "未插卡"));
+    UI_set_media_state(PLAYER_SCANNING); publish(0, 1, true);
+    /* 控件回调本身读取 user_data，直接发送已注册模式图标事件。 */
+    for(unsigned i = 0; i < lv_obj_get_child_count(lv_screen_active()); ++i) {
+        lv_obj_t *obj = lv_obj_get_child(lv_screen_active(), i);
+        if(lv_obj_check_type(obj, &lv_image_class) && lv_image_get_src(obj) == &music_player_repeat) {
+            lv_obj_send_event(obj, LV_EVENT_CLICKED, NULL); assert(requested_mode == PLAYER_REPEAT_ONE);
+            lv_obj_send_event(obj, LV_EVENT_CLICKED, NULL); assert(requested_mode == PLAYER_SHUFFLE);
+            lv_obj_send_event(obj, LV_EVENT_CLICKED, NULL); assert(requested_mode == PLAYER_PLAY_LIST);
+        }
+    }
     (void)requested_repeat;
     lv_refr_now(NULL);
     check_bounds(lv_screen_active());

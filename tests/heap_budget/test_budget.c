@@ -30,7 +30,7 @@ int main(void)
     allocate(80 + 8);      /* 编码器按键队列 */
     allocate(80 + 12);
     allocate(80 + 1180);
-    allocate(80 + 1180);
+    allocate(80 + 1184);
     allocate(80 + 1);      /* 浏览、命令、状态、停止确认队列 */
     task(8 * 1024);        /* 音频，曲库任务改为普通 SRAM 静态分配。 */
     size_t boot_free = xPortGetFreeHeapSize();

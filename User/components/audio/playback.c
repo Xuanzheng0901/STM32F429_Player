@@ -8,10 +8,11 @@
 
 typedef struct {
     music_info_t info;
-    uint32_t index;
-    bool select, autoplay, toggle, set_repeat, repeat_one, stop;
+    uint32_t index, serial;
+    bool select, autoplay, toggle, stop;
 } audio_command_t;
 
+static uint32_t s_serial;
 static QueueHandle_t s_commands, s_status;
 static TaskHandle_t s_audio_task;
 static QueueHandle_t s_stop_ack;
@@ -28,11 +29,12 @@ static void post_notice(player_notice_t notice)
     taskEXIT_CRITICAL();
 }
 
-void playback_select(uint32_t index, const music_info_t *info, bool autoplay)
+uint32_t playback_select(uint32_t index, const music_info_t *info, bool autoplay)
 {
     audio_command_t command = {0};
     taskENTER_CRITICAL();
     xQueuePeek(s_commands, &command, 0);
+    command.serial = ++s_serial;
     command.info = *info;
     command.index = index;
     command.select = true;
@@ -41,6 +43,7 @@ void playback_select(uint32_t index, const music_info_t *info, bool autoplay)
     xQueueOverwrite(s_commands, &command);
     taskEXIT_CRITICAL();
     xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
+    return command.serial;
 }
 
 static void audio_task(void *argument)
@@ -48,7 +51,7 @@ static void audio_task(void *argument)
     (void)argument;
     audio_command_t command;
     audio_status_t status = {0};
-    bool selected = false, repeat = false;
+    bool selected = false;
     uint32_t last_elapsed = UINT32_MAX;
     audio_state_t last_state = AUDIO_STOPPED;
     audio_output_init();
@@ -59,6 +62,7 @@ static void audio_task(void *argument)
             audio_player_stop();
             usb_audio_stop();
             selected = false;
+            xQueueReset(s_status);
             s_usb_mode = connected;
             s_usb_playing = false;
             post_notice(connected ? PLAYER_USB_CONNECTED : PLAYER_USB_DISCONNECTED);
@@ -86,7 +90,8 @@ static void audio_task(void *argument)
                 continue;
             }
             if(s_usb_mode || sdcard_is_removed()) goto output;
-            if(command.set_repeat) repeat = command.repeat_one;
+            changed = status.serial != command.serial;
+            status.serial = command.serial;
             if(command.select) {
                 audio_output_set_active(false);
                 audio_player_stop();
@@ -102,10 +107,6 @@ static void audio_task(void *argument)
                 else start = true;
                 changed = true;
             }
-        }
-        if(selected && audio_player_state() == AUDIO_FINISHED && repeat) {
-            start = true;
-            changed = true;
         }
         /* 统一处理起播和重播，后续格式解码也从这里分派。 */
         if(start) {
@@ -178,27 +179,16 @@ bool playback_notice(player_notice_t *notice)
     return pending;
 }
 
-void playback_toggle(void)
+uint32_t playback_toggle(void)
 {
-    if(usb_audio_connected()) return;
+    if(usb_audio_connected()) return 0;
     audio_command_t command = {0};
     taskENTER_CRITICAL();
     xQueuePeek(s_commands, &command, 0);
+    command.serial = ++s_serial;
     command.toggle = !command.toggle;
     xQueueOverwrite(s_commands, &command);
     taskEXIT_CRITICAL();
     xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
-}
-
-void playback_set_repeat(bool repeat_one)
-{
-    if(usb_audio_connected()) return;
-    audio_command_t command = {0};
-    taskENTER_CRITICAL();
-    xQueuePeek(s_commands, &command, 0);
-    command.set_repeat = true;
-    command.repeat_one = repeat_one;
-    xQueueOverwrite(s_commands, &command);
-    taskEXIT_CRITICAL();
-    xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
+    return command.serial;
 }

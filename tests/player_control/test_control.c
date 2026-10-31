@@ -14,7 +14,11 @@
 struct test_queue { unsigned size; bool pending; unsigned char data[2048]; };
 static struct test_queue queues[4];
 static unsigned queue_count, critical, selected, focused, elapsed, starts;
-static bool inject_browse, playing;
+uint32_t xTaskGetTickCount(void) { return starts * 997U + 123U; }
+static bool inject_browse, playing, allow_bad_track;
+static unsigned finishes;
+static bool select_on_finish;
+static void on_finished(uint32_t index) { (void)index; ++finishes; if(select_on_finish) player_request(5, true); }
 static void *main_fiber;
 static music_info_t selected_info;
 static audio_state_t state;
@@ -121,7 +125,7 @@ bool audio_player_start(music_info_t *info)
 {
     assert(info->type == MUSIC_WAV || info->type == MUSIC_MP3 || info->type == MUSIC_FLAC);
     ++starts; audio_elapsed = 0;
-    if(info->path[0] == 32) { state = AUDIO_ERROR; return false; }
+    if(info->path[0] == 32 && !allow_bad_track) { state = AUDIO_ERROR; return false; }
     info->sample_rate_hz = 44100; info->bits_per_sample = 16; info->duration_seconds = 90;
     state = AUDIO_PLAYING; return true;
 }
@@ -156,8 +160,9 @@ int main(int argc, char **argv)
         player_toggle(); process_all(); assert(state == AUDIO_PLAYING);
         goto done;
     }
-    player_callbacks_t callbacks = {.window = on_window, .playback = on_playback, .error = on_error, .notice = on_notice, .usb = on_usb};
+    player_callbacks_t callbacks = {.window = on_window, .playback = on_playback, .error = on_error, .notice = on_notice, .usb = on_usb, .finished = on_finished};
     assert(player_init(&callbacks));
+    player_set_mode(PLAYER_PLAY_ONCE);
     memset(&callbacks, 0, sizeof(callbacks)); /* 初始化复制接口，不保留调用方栈指针。 */
     process_all();
     assert(selected == 0 && !playing && starts == 0);
@@ -214,6 +219,39 @@ int main(int argc, char **argv)
     host_connected = false; SwitchToFiber(tasks[0].fiber);
     process_all(); assert(!usb_running && state == AUDIO_STOPPED);
     player_toggle(); process_all(); assert(state == AUDIO_PLAYING && starts == saved_starts + 2);
+    allow_bad_track = true;
+    player_set_mode(PLAYER_PLAY_LIST); player_request(39, true); process_all();
+    unsigned finished_before = finishes;
+    state = AUDIO_FINISHED; process_all();
+    assert(selected == 0 && playing && finishes == finished_before + 1);
+    process_all(); assert(finishes == finished_before + 1);
+    player_set_mode(PLAYER_SHUFFLE); player_request(0, true); process_all();
+    bool seen[40] = {true};
+    for(unsigned i = 1; i < 40; ++i) {
+        state = AUDIO_FINISHED; process_all();
+        assert(playing && selected < 40 && !seen[selected]); seen[selected] = true;
+    }
+    unsigned last = selected;
+    memset(seen, 0, sizeof(seen));
+    for(unsigned i = 0; i < 40; ++i) {
+        state = AUDIO_FINISHED; process_all();
+        assert(playing && selected < 40 && !seen[selected]);
+        if(!i) assert(selected != last);
+        seen[selected] = true;
+    }
+    player_set_mode(PLAYER_PLAY_LIST); select_on_finish = true;
+    state = AUDIO_FINISHED; process_all(); assert(selected == 5 && playing);
+    select_on_finish = false;
+    /* 音频任务已发布 EOF，前端还没消费时手动选曲，旧事件不得覆盖新曲。 */
+    state = AUDIO_FINISHED; SwitchToFiber(tasks[0].fiber);
+    player_request(7, true); process_all(); assert(selected == 7 && playing);
+    player_set_mode(PLAYER_PLAY_ONCE);
+    state = AUDIO_FINISHED; process_all();
+    finished_before = finishes;
+    player_toggle(); process_all(); assert(playing);
+    state = AUDIO_FINISHED; process_all(); assert(finishes == finished_before + 1);
+    finished_before = finishes;
+    state = AUDIO_ERROR; process_all(); assert(finishes == finished_before);
 done:
     for(unsigned i = 0; i < 2; ++i) DeleteFiber(tasks[i].fiber);
     ConvertFiberToThread();

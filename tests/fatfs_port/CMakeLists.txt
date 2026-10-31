@@ -12,7 +12,7 @@ set(METADATA_SOURCES
 set(LIBRARY_SOURCES ${PORT_SOURCES} ${METADATA_SOURCES}
     "${REPO}/User/components/player/music_library.c")
 set(FILESYSTEM_SOURCES ${LIBRARY_SOURCES} "${REPO}/User/components/sdcard/sdcard.c")
-add_executable(removal test_removal.c mock_platform.c ${FILESYSTEM_SOURCES})
+add_executable(removal "${REPO}/User/components/player/player_shuffle.c" test_removal.c mock_platform.c ${FILESYSTEM_SOURCES})
 add_executable(diskio test_diskio.c mock_platform.c "${PORT}/diskio.c"
     "${PORT}/sdmmc.c")
 add_executable(filesystem test_filesystem.c mock_platform.c ${FILESYSTEM_SOURCES})

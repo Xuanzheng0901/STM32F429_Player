@@ -40,7 +40,7 @@ static unsigned notice_read, notice_write;
 static const char *const notice_text[] = {
     "SD卡已插入", "SD卡已拔出", "USB已连接", "USB已断开", "耳机已插入", "耳机已拔出"
 };
-static bool repeat_one;
+static player_mode_t play_mode = PLAYER_PLAY_LIST;
 static lv_style_t block_style;
 
 /* 所有坐标均为 SSD1685 横屏的原生像素，360 x 184。 */
@@ -140,8 +140,7 @@ static void ui_update(void)
     lv_obj_set_width(progress_fill, x - PLAYER_PROGRESS_X + 1);
     lv_obj_set_x(progress_knob, x - 2);
     lv_image_set_src(play_icon, (usb_mode ? usb_playing : playing) ? &music_player_pause : &music_player_play);
-    if(repeat_one) lv_obj_remove_flag(repeat_label, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(repeat_label, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text_static(repeat_label, play_mode == PLAYER_REPEAT_ONE ? "1" : play_mode == PLAYER_SHUFFLE ? "R" : "L");
     ui_update_markers();
 }
 
@@ -311,8 +310,9 @@ static void ui_action(lv_event_t *event)
     int64_t selected = action == 5 + PLAYER_TRACK_CENTER ? list_focus : list_first + (int64_t)action - 5;
     if(action >= 5 && (selected < 0 || selected >= total_tracks)) return;
     if(action == 0) {
-        repeat_one = !repeat_one;
-        player_set_repeat(repeat_one);
+        play_mode = play_mode == PLAYER_PLAY_LIST ? PLAYER_REPEAT_ONE :
+                    play_mode == PLAYER_REPEAT_ONE ? PLAYER_SHUFFLE : PLAYER_PLAY_LIST;
+        player_set_mode(play_mode);
     }
     else if(action == 2 || (action >= 5 && selected == current_track)) {
         player_toggle();

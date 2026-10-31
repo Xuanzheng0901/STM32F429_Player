@@ -1,6 +1,6 @@
 # 音频输出
 
-playback.h 提供选曲、暂停、循环、停止确认以及状态/事件读取接口；命令、状态、停止确认队列均为模块私有。playback.c 内的 audio 任务优先级 7、栈 8 KiB，统一管理 SD/USB 音源切换、重播、耳放门控和事件投递。复用原有任务和队列，不新增 RTOS 动态分配。
+playback.h 提供选曲、暂停、循环、停止确认以及状态/事件读取接口；命令、状态、停止确认队列均为模块私有。自然结束仅发布 AUDIO_FINISHED，列表/循环/洗牌由 player 决定；状态携带命令编号，前端过滤过期快照。playback.c 内的 audio 任务优先级 7、栈 8 KiB，统一管理 SD/USB 音源切换、耳放门控和事件投递。复用原有任务和队列，不新增 RTOS 动态分配。
 
 - audio_player.c：向 decoder/file_decoder.h 拉取 PCM，管理两个 12 KiB SRAM 半缓冲、I2S DMA 相位、DAC 锁定、播放进度和暂停。这里不解析文件、不调用 FatFs。
 - audio_i2s.c：I2S2 采样率及 16/24/32 位槽配置。

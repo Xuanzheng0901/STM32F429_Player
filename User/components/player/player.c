@@ -5,6 +5,7 @@
 #include "task.h"
 #include "log.h"
 #include "playback.h"
+#include "player_shuffle.h"
 
 #define MUSIC_STACK_WORDS 4096U
 
@@ -23,6 +24,9 @@ static music_window_t s_window;
 static player_callbacks_t s_callbacks;
 
 static volatile bool s_available;
+static volatile player_mode_t s_mode = PLAYER_PLAY_LIST;
+static volatile bool s_shuffle_reset = true;
+static uint32_t s_selection, s_finished;
 
 static FRESULT update_window(uint32_t index, bool select, uint32_t total)
 {
@@ -36,7 +40,7 @@ static FRESULT update_window(uint32_t index, bool select, uint32_t total)
         result = sdcard_load_music_window(index, &s_window);
     if(result != FR_OK) LOGE("SD", "read music window failed: FatFs=%d", (int)result);
     if(result == FR_OK) {
-        if(select) playback_select(index, &s_window.items[index - s_window.first_index], true);
+        if(select) s_selection = playback_select(index, &s_window.items[index - s_window.first_index], true);
         else if(s_callbacks.window) s_callbacks.window(&s_window, index, false);
     }
     else if(s_callbacks.error) s_callbacks.error();
@@ -67,8 +71,10 @@ static void music_task(void *argument)
         player_notice_t notice;
         while(playback_notice(&notice)) {
             /* 断开事件不能被状态快照合并掉，UI 忙时仍须恢复 SD 选曲。 */
-            if(notice == PLAYER_USB_DISCONNECTED && !usb_mode && s_available && s_window.count)
-                playback_select(s_window.first_index, &s_window.items[0], false);
+            if(notice == PLAYER_USB_DISCONNECTED && !usb_mode && s_available && s_window.count) {
+                s_selection = playback_select(s_window.first_index, &s_window.items[0], false);
+                s_shuffle_reset = true;
+            }
             if(s_callbacks.notice) s_callbacks.notice(notice);
         }
         sdcard_event_t event = sdcard_poll();
@@ -96,7 +102,8 @@ static void music_task(void *argument)
                 continue;
             }
             /* 首次选中但不自动播放，重新插卡不沿用旧卡的曲目或控制命令。 */
-            if(s_window.count) playback_select(0, &s_window.items[0], false);
+            if(s_window.count) s_selection = playback_select(0, &s_window.items[0], false);
+            s_shuffle_reset = true;
             if(s_callbacks.window) s_callbacks.window(&s_window, 0, true);
             s_available = true;
             LOGI("SD", "library ready: %lu songs, RTOS heap free=%u min=%u",
@@ -104,13 +111,32 @@ static void music_task(void *argument)
                  (unsigned)xPortGetMinimumEverFreeHeapSize());
         }
         if(xQueueReceive(s_requests, &request, pdMS_TO_TICKS(20)) == pdTRUE && s_available && !usb_mode) {
+            if(request.select) s_shuffle_reset = true;
             if(request.select && update_window(request.select_index, true, s_window.total) != FR_OK) continue;
             update_window(request.index, false, s_window.total);
         }
-        if(!playback_status(&status) || !s_available || usb_mode) continue;
+        if(!playback_status(&status) || !s_available || usb_mode || status.serial != s_selection) continue;
         if(s_callbacks.playback)
             s_callbacks.playback(status.index, &status.info, status.elapsed, status.state == AUDIO_PLAYING);
         if(status.state == AUDIO_ERROR && s_callbacks.error) s_callbacks.error();
+        if(status.state != AUDIO_FINISHED || status.serial == s_finished || status.serial != s_selection) continue;
+        s_finished = status.serial;
+        if(s_callbacks.finished) s_callbacks.finished(status.index);
+        if(status.serial != s_selection) continue;
+        /* 完成回调或用户已有选曲请求时，优先执行显式命令。 */
+        if(xQueuePeek(s_requests, &request, 0) == pdTRUE && request.select) continue;
+        uint32_t next = status.index;
+        if(s_mode == PLAYER_PLAY_ONCE) continue;
+        if(s_mode == PLAYER_PLAY_LIST) next = (next + 1U) % s_window.total;
+        if(s_mode == PLAYER_SHUFFLE) {
+            if(s_shuffle_reset) {
+                player_shuffle_reset(s_window.total, status.index, xTaskGetTickCount());
+                s_shuffle_reset = false;
+            }
+            next = player_shuffle_next(status.index);
+        }
+        if(update_window(next, true, s_window.total) == FR_OK && s_callbacks.window)
+            s_callbacks.window(&s_window, next, true);
     }
 }
 
@@ -130,8 +156,18 @@ failed:
     return false;
 }
 
-void player_toggle(void) { if(s_available) playback_toggle(); }
-void player_set_repeat(bool repeat_one) { if(s_available) playback_set_repeat(repeat_one); }
+void player_toggle(void)
+{
+    if(!s_available) return;
+    uint32_t serial = playback_toggle();
+    if(serial) s_selection = serial;
+}
+void player_set_mode(player_mode_t mode)
+{
+    s_mode = mode;
+    s_shuffle_reset = true;
+}
+void player_set_repeat(bool repeat_one) { player_set_mode(repeat_one ? PLAYER_REPEAT_ONE : PLAYER_PLAY_ONCE); }
 
 void player_request(uint32_t index, bool select)
 {

@@ -28,14 +28,14 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
     cmake --preset Release
     cmake --build --preset Release -j 8
 
-构建输出为 build/Debug 或 build/Release 中的 F429_Player_remake.elf。所有用户组件输出 .su 栈报告；Debug 已避免整块 music_window_t 清零引入约 17 KiB 的栈临时量。audio_task 自身栈帧 2408 B，music_task 1240 B；这不是完整调用链的最高栈占用。
+构建输出为 build/Debug 或 build/Release 中的 F429_Player_remake.elf。所有用户组件输出 .su 栈报告；Debug 已避免整块 music_window_t 清零引入约 17 KiB 的栈临时量。audio_task 自身栈帧 2408 B，music_task 1248 B；这不是完整调用链的最高栈占用。
 
 当前链接结果：
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 147,312 B | 24+40 KiB | 595,748 B |
-| Release | 147,296 B | 24+40 KiB | 535,220 B |
+| Debug | 147,360 B | 24+40 KiB | 596,864 B |
+| Release | 147,360 B | 24+40 KiB | 535,828 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
@@ -47,6 +47,8 @@ FreeRTOS 动态堆中的长期任务栈合计 29 KiB，包含 audio 8 KiB、LVGL
 
 UI 对插拔 SD 卡、USB 主机连接/断开、耳机插拔依次显示三秒提示。USB 收到主机复位或 SOF 时独占 I2S2，固定 48 kHz/16 位双声道；连续 500 ms 无总线活动退出，主机挂起也按断开处理。SD 卡可在 USB 模式继续挂载/卸载，不能抢占音频输出；退出 USB 后选曲保持暂停。PB14 低电平插入，PD9 低电平静音，拔出由 EXTI14 立即静音，插入消抖 30 ms。实现和缓冲策略见 [音频输出说明](audio/README.md)。
 
-本次未增加 RTOS 动态分配。USB FIFO 为 8192 B、DMA 为 1536 B，均在普通 SRAM；ST USB 类缓冲由 15360 B 缩至 768 B。Release 普通 SRAM 剩余 49312 B。
+本次未增加 RTOS 动态分配。USB FIFO 为 8192 B、DMA 为 1536 B，均在普通 SRAM；ST USB 类缓冲由 15360 B 缩至 768 B。Release 普通 SRAM 剩余 49248 B。
 
 模块边界：UI → player → audio/playback → audio_player → decoder/file_decoder → FatFs；USB 直接向 audio/usb_audio 写 PCM。解码层不依赖音频硬件，player 不直接接触 DMA 或播放中的 FIL。
+
+播放完成由 player_callbacks_t.finished 通知，player 负责列表环绕、单曲循环和整轮不重复洗牌；UI 循环按钮以 L/1/R 表示三种模式。播放策略不再放在音频任务内。
