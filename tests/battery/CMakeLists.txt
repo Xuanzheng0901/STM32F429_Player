@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22)
+project(battery_tests C)
+enable_testing()
+add_executable(battery test_battery.c)
+target_include_directories(battery PRIVATE mocks)
+target_compile_options(battery PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME battery COMMAND battery)

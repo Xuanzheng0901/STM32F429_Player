@@ -29,6 +29,7 @@ static lv_obj_t *title_label, *artist_label, *album_label, *status_label, *index
 static lv_obj_t *format_label, *audio_label;
 static lv_obj_t *elapsed_label, *duration_label, *progress_fill, *progress_knob;
 static lv_obj_t *play_icon;
+static lv_obj_t *battery_voltage, *battery_level, *battery_fill;
 static lv_obj_t *control_buttons[5];
 static uint32_t current_track;
 static uint32_t elapsed;
@@ -285,6 +286,18 @@ void UI_set_usb_status(bool connected, bool active)
     lvgl_port_unlock();
 }
 
+void UI_set_battery(uint16_t millivolts, uint8_t percent)
+{
+    lvgl_port_lock(portMAX_DELAY);
+    const unsigned voltage = (millivolts + 5U) / 10U;
+    lv_label_set_text_fmt(battery_voltage, "%u.%02uV", voltage / 100U, voltage % 100U);
+    lv_label_set_text_fmt(battery_level, "%u%%", (unsigned)percent);
+    lv_obj_set_width(battery_fill, (20U * percent + 50U) / 100U);
+    if(percent) lv_obj_remove_flag(battery_fill, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(battery_fill, LV_OBJ_FLAG_HIDDEN);
+    lvgl_port_unlock();
+}
+
 static void ui_action(lv_event_t *event)
 {
     const uintptr_t action = (uintptr_t)lv_event_get_user_data(event);
@@ -396,10 +409,12 @@ void UI_init(void)
     ui_label(screen, "MUSIC", small, 12, 163, 46, 17, LV_TEXT_ALIGN_LEFT, false);
     status_label = ui_label(screen, "已暂停", small, 67, 163, 48, 17, LV_TEXT_ALIGN_CENTER, false);
     index_label = ui_label(screen, "0 / 0", small, 129, 163, 72, 17, LV_TEXT_ALIGN_LEFT, false);
-    ui_label(screen, "--", small, 293, 163, 18, 17, LV_TEXT_ALIGN_CENTER, false);
+    battery_voltage = ui_label(screen, "--.--V", small, 216, 163, 48, 17, LV_TEXT_ALIGN_RIGHT, false);
+    battery_level = ui_label(screen, "--%", small, 276, 163, 36, 17, LV_TEXT_ALIGN_RIGHT, false);
     ui_block(screen, 319, 166, 26, 11, false);
     ui_block(screen, 320, 167, 24, 9, true);
-    ui_block(screen, 322, 169, 20, 5, false);
+    battery_fill = ui_block(screen, 322, 169, 20, 5, false);
+    lv_obj_add_flag(battery_fill, LV_OBJ_FLAG_HIDDEN);
     ui_block(screen, 345, 169, 3, 5, false);
     ui_block(screen, 12, 157, 336, 1, false);
 

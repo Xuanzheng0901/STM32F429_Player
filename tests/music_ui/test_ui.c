@@ -181,6 +181,7 @@ static void save_preview(const char *path)
     info->duration_seconds = 226;
     assert(UI_set_music_window(&window, 2, true));
     assert(UI_set_player_status(2, info, 84, true));
+    UI_set_battery(3975, 75);
     lv_refr_now(NULL);
     check_bounds(lv_screen_active());
     FILE *file = fopen(path, "wb");
@@ -199,6 +200,22 @@ int main(int argc, char **argv)
         return 0;
     }
     check_bounds(lv_screen_active());
+    assert(!strcmp(lv_label_get_text(battery_voltage), "--.--V"));
+    assert(!strcmp(lv_label_get_text(battery_level), "--%"));
+    assert(lv_obj_has_flag(battery_fill, LV_OBJ_FLAG_HIDDEN));
+    UI_set_battery(4200, 100);
+    lv_obj_update_layout(lv_screen_active());
+    assert(!strcmp(lv_label_get_text(battery_voltage), "4.20V"));
+    assert(!strcmp(lv_label_get_text(battery_level), "100%"));
+    assert(lv_obj_get_width(battery_fill) == 20);
+    UI_set_battery(3306, 0);
+    assert(!strcmp(lv_label_get_text(battery_voltage), "3.31V"));
+    assert(lv_obj_has_flag(battery_fill, LV_OBJ_FLAG_HIDDEN));
+    UI_set_battery(3821, 50);
+    lv_obj_update_layout(lv_screen_active());
+    assert(!strcmp(lv_label_get_text(battery_level), "50%"));
+    assert(!lv_obj_has_flag(battery_fill, LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_get_width(battery_fill) == 10);
     assert(!strcmp(lv_label_get_text(status_label), "未插卡"));
     assert(UI_set_music_error());
     assert(!strcmp(lv_label_get_text(title_label), "加载失败"));

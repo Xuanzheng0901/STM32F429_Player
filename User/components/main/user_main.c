@@ -2,6 +2,7 @@
 #include "UI.h"
 #include "es9018.h"
 #include "player.h"
+#include "battery.h"
 #include "main.h"
 
 void app_main(void)
@@ -22,6 +23,7 @@ void app_main(void)
         LOGE("PLAYER", "task creation failed");
         UI_set_music_error();
     }
+    if(!battery_init(UI_set_battery)) LOGE("BATTERY", "task creation failed");
     LOGI("MEM", "RTOS heap: free=%u, min=%u bytes (startup task still active)",
          (unsigned)xPortGetFreeHeapSize(), (unsigned)xPortGetMinimumEverFreeHeapSize());
 }

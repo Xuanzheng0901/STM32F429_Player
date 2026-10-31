@@ -10,6 +10,7 @@ file(GLOB COMPONENT_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_LIST_DIR}/player/*.c
         ${CMAKE_CURRENT_LIST_DIR}/decoder/*.c
         ${CMAKE_CURRENT_LIST_DIR}/audio/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/battery/*.c
         ${CMAKE_CURRENT_LIST_DIR}/UI/*.c
 )
 
@@ -43,5 +44,6 @@ target_include_directories(user_components INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/UI
         ${CMAKE_CURRENT_LIST_DIR}/decoder
         ${CMAKE_CURRENT_LIST_DIR}/audio
+        ${CMAKE_CURRENT_LIST_DIR}/battery
 
 )

@@ -26,4 +26,7 @@ void UI_set_media_state(player_media_t state);
 void UI_show_notice(player_notice_t notice);
 void UI_set_usb_status(bool connected, bool playing);
 
+/* UI_init() 后由电池任务调用，内部获取 LVGL 锁。 */
+void UI_set_battery(uint16_t millivolts, uint8_t percent);
+
 #endif

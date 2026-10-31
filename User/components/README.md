@@ -9,6 +9,7 @@
 | player | 前端命令、曲库和标签、卡挂载流程及 UI 事件转发 |
 | decoder | 文件打开/关闭、WAV/MP3/FLAC 解码和标准双声道 PCM |
 | audio | 音频任务、SD/USB 仲裁、PCM 缓冲、I2S/DMA、DAC 格式和耳放静音 |
+| battery | 每 30 秒读取 ADC1/PB1，平均、还原电池电压并估算电量，通过回调发布 |
 | sdcard | 私有 FATFS 卷、挂载/卸载、插拔事件 |
 | fatfs | FatFs R0.16、FreeRTOS 锁和内存、磁盘适配、SDIO 初始化与 DMA、卡检测及介质失效锁存 |
 | display / es9018 / log | 当前 F429 硬件适配 |
@@ -34,8 +35,8 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 172,536 B | 24+40 KiB | 594,876 B |
-| Release | 172,520 B | 24+40 KiB | 535,872 B |
+| Debug | 174,688 B | 24+40 KiB | 597,016 B |
+| Release | 174,680 B | 24+40 KiB | 537,264 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
@@ -47,14 +48,18 @@ FreeRTOS 动态堆中的长期任务栈合计 29 KiB，包含 audio 8 KiB、LVGL
 
 UI 对插拔 SD 卡、USB 主机连接/断开、耳机插拔依次显示三秒提示。USB 收到主机复位或 SOF 时独占 I2S2，固定 48 kHz/16 位双声道；连续 500 ms 无总线活动退出，主机挂起也按断开处理。SD 卡可在 USB 模式继续挂载/卸载，不能抢占音频输出；退出 USB 后选曲保持暂停。PB14 低电平插入，PD9 低电平静音，拔出由 EXTI14 立即静音，插入消抖 30 ms。实现和缓冲策略见 [音频输出说明](audio/README.md)。
 
-本次未增加 RTOS 动态分配。USB FIFO 为 8192 B、DMA 为 1536 B，均在普通 SRAM；ST USB 类缓冲由 15360 B 缩至 768 B。Release 普通 SRAM 剩余 24088 B。
+USB 模块未增加 RTOS 动态分配。USB FIFO 为 8192 B、DMA 为 1536 B，均在普通 SRAM；ST USB 类缓冲由 15360 B 缩至 768 B。加入电池任务后，Release 普通 SRAM 剩余 21928 B。
 
 模块边界：UI → player → audio/playback → audio_player → decoder/file_decoder → FatFs；USB 直接向 audio/usb_audio 写 PCM。解码层不依赖音频硬件，player 不直接接触 DMA 或播放中的 FIL。
 
-播放完成由 player_callbacks_t.finished 通知，player 负责列表环绕、单曲循环和整轮不重复洗牌；UI 循环按钮以 L/1/R 表示三种模式。播放策略不再放在音频任务内。
+播放完成由 player_callbacks_t.finished 通知，player 负责列表环绕、单曲循环和整轮不重复洗牌；UI 通过三种黑白图标显示播放模式。播放策略不再放在音频任务内。
 
 上方五键按物理位置对应 UI 按钮：UP1～5 为列表、下一首、播放/暂停、上一首、模式。侧边 SIDE1（下）/SIDE2（中）/SIDE3（上）为向下浏览/确认/向上浏览。编码器驱动中的 LV_PORT_ENCODER_SIDE_KEYS 开关可恢复 TIM3/PB3，详见 [输入说明](display/README.md)。
 
 曲库索引在建库后持续只读打开，卸载时关闭。翻页直接读取缓存的路径与标签，不再对 15 首音乐逐一打开、查目录和跳转解析标签；FatFs 锁超时会记录持锁任务及持续时间。
 
 文件播放半缓冲扩为 24 KiB，96 kHz 宽格式的补数预算从 16 ms 增至 32 ms；文件音频输出单独启用 -O2。新增约 24 KiB 普通 SRAM 占用，RTOS/LVGL 的 CCMRAM 配额和任务栈容量不变。
+
+电池任务使用 2 KiB 静态栈，不增加 RTOS 动态堆分配。上电及每 30 秒读取 16 次 ADC，
+使用 3.3 V 参考和二分之一分压还原电压，按 ADI 典型单节锂电池表插值估算百分比。
+UI 底栏显示电压、百分比及电池填充条，细节和表格来源见 [电池说明](battery/README.md)。
