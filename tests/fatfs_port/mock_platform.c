@@ -177,3 +177,5 @@ void vQueueDelete(QueueHandle_t queue) { free(queue); }
 BaseType_t xTaskNotify(TaskHandle_t task, uint32_t value, int action)
 { (void)task; (void)value; (void)action; return pdTRUE; }
 void vTaskDelete(TaskHandle_t task) { (void)task; }
+
+const char *pcTaskGetName(void *task) { (void)task; return "test"; }

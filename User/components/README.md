@@ -15,7 +15,7 @@
 
 UI 使用左侧五行歌单、右上方五个控制图标、右侧歌曲信息及进度、底部状态栏的布局。歌单高亮固定在中间行，浏览不改变右侧当前曲目信息；控制图标依次为循环、上一首、播放/暂停、下一首、返回歌单。唱片为 67×67 的 I1 资源，图标在解码时逐行转换为 ARGB8888，屏幕缓冲保持 I1。
 
-player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，player/music_tags.c 负责 ID3、WAV INFO 和 FLAC Vorbis Comment；fatfs/sdmmc.c 负责块设备通信。共享数据在 player/music.h，UTF-8 路径容量 1024 字节。扫描根目录及最多四层子目录；每条索引固定 1024 字节，不在 RAM 中保存整库。显示文本截断保留完整 UTF-8 字符。
+player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，player/music_tags.c 负责 ID3、WAV INFO 和 FLAC Vorbis Comment；fatfs/sdmmc.c 负责块设备通信。共享数据在 player/music.h，UTF-8 路径容量 1024 字节。扫描根目录及最多四层子目录；每条索引为完整 music_info_t（当前 1168 字节，包含路径及建库时读取的标签），不在 RAM 中保存整库。显示文本截断保留完整 UTF-8 字符。
 
 卡检测由曲库任务每 20 ms 轮询，连续三次有卡后挂载和重建索引。开机无卡显示未插卡，插入后自动扫描；拔卡时 SDIO 立即锁存介质失效，音频任务停止 DMA、关闭文件，曲库任务等到停止确认后卸载并清空 UI。重新插入选择第一首但不自动播放。挂载失败不后台反复重试，再次插卡时重新尝试。
 
@@ -34,8 +34,8 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 147,368 B | 24+40 KiB | 592,992 B |
-| Release | 147,360 B | 24+40 KiB | 534,060 B |
+| Debug | 147,944 B | 24+40 KiB | 593,236 B |
+| Release | 147,936 B | 24+40 KiB | 534,404 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
@@ -47,10 +47,12 @@ FreeRTOS 动态堆中的长期任务栈合计 29 KiB，包含 audio 8 KiB、LVGL
 
 UI 对插拔 SD 卡、USB 主机连接/断开、耳机插拔依次显示三秒提示。USB 收到主机复位或 SOF 时独占 I2S2，固定 48 kHz/16 位双声道；连续 500 ms 无总线活动退出，主机挂起也按断开处理。SD 卡可在 USB 模式继续挂载/卸载，不能抢占音频输出；退出 USB 后选曲保持暂停。PB14 低电平插入，PD9 低电平静音，拔出由 EXTI14 立即静音，插入消抖 30 ms。实现和缓冲策略见 [音频输出说明](audio/README.md)。
 
-本次未增加 RTOS 动态分配。USB FIFO 为 8192 B、DMA 为 1536 B，均在普通 SRAM；ST USB 类缓冲由 15360 B 缩至 768 B。Release 普通 SRAM 剩余 49248 B。
+本次未增加 RTOS 动态分配。USB FIFO 为 8192 B、DMA 为 1536 B，均在普通 SRAM；ST USB 类缓冲由 15360 B 缩至 768 B。Release 普通 SRAM 剩余 48672 B。
 
 模块边界：UI → player → audio/playback → audio_player → decoder/file_decoder → FatFs；USB 直接向 audio/usb_audio 写 PCM。解码层不依赖音频硬件，player 不直接接触 DMA 或播放中的 FIL。
 
 播放完成由 player_callbacks_t.finished 通知，player 负责列表环绕、单曲循环和整轮不重复洗牌；UI 循环按钮以 L/1/R 表示三种模式。播放策略不再放在音频任务内。
 
 上方五键按物理位置对应 UI 按钮：UP1～5 为列表、下一首、播放/暂停、上一首、模式。侧边 SIDE1（下）/SIDE2（中）/SIDE3（上）为向下浏览/确认/向上浏览。编码器驱动中的 LV_PORT_ENCODER_SIDE_KEYS 开关可恢复 TIM3/PB3，详见 [输入说明](display/README.md)。
+
+曲库索引在建库后持续只读打开，卸载时关闭。翻页直接读取缓存的路径与标签，不再对 15 首音乐逐一打开、查目录和跳转解析标签；FatFs 锁超时会记录持锁任务及持续时间。

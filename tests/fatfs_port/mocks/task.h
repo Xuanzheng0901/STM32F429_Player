@@ -14,3 +14,5 @@ TaskHandle_t xTaskCreateStatic(void (*entry)(void *), const char *name, unsigned
 #define eSetBits 1
 BaseType_t xTaskNotify(TaskHandle_t task, uint32_t value, int action);
 void vTaskDelete(TaskHandle_t task);
+
+const char *pcTaskGetName(void *task);

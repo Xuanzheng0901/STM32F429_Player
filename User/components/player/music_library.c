@@ -7,6 +7,14 @@
 #define SCAN_MAX_DEPTH 4U /* 根目录 + 最多四层子目录，限制栈及文件锁占用。 */
 
 static const char s_index_path[] = "0:/music.idx";
+static FIL s_index;
+static bool s_index_open;
+
+void music_library_close(void)
+{
+    if(s_index_open) f_close(&s_index);
+    s_index_open = false;
+}
 
 static bool ends_with(const TCHAR *path, const char *suffix)
 {
@@ -28,9 +36,12 @@ static music_type_t music_type(const TCHAR *path)
     return MUSIC_UNKNOWN;
 }
 
-/* 深度优先扫描，只在 SD 卡上写固定大小的 UTF-8 路径记录。 */
-static FRESULT scan_directory(FIL *index, TCHAR *path, unsigned depth, uint32_t *count)
+static void make_title(music_info_t *item);
+
+/* 插卡建库时读取标签，路径与显示信息一起写索引；播放中不再打开曲目解析标签。 */
+static FRESULT scan_directory(FIL *index, music_info_t *item, unsigned depth, uint32_t *count)
 {
+    TCHAR *path = item->path;
     DIR directory;
     FILINFO info;
     FRESULT result = f_opendir(&directory, path);
@@ -61,15 +72,26 @@ static FRESULT scan_directory(FIL *index, TCHAR *path, unsigned depth, uint32_t 
         if(start != parent_length) path[parent_length] = '/';
         memcpy(path + start, info.fname, (name_length + 1) * sizeof(TCHAR));
         if(is_directory) {
-            result = scan_directory(index, path, depth + 1, count);
+            result = scan_directory(index, item, depth + 1, count);
         } else {
             memset(path + start + name_length + 1, 0,
                    (PATH_CAPACITY - start - name_length - 1) * sizeof(TCHAR));
-            UINT written;
-            if(*count >= UINT32_MAX / (PATH_CAPACITY * sizeof(TCHAR))) result = FR_DENIED;
+            memset(item->title, 0, sizeof(item->title));
+            memset(item->artist, 0, sizeof(item->artist));
+            memset(item->album, 0, sizeof(item->album));
+            item->type = music_type(path);
+            item->sample_rate_hz = item->duration_seconds = item->bits_per_sample = 0;
+            make_title(item);
+            FRESULT tags = music_tags_read(item);
+            if(tags == FR_DISK_ERR || tags == FR_NOT_READY || tags == FR_TIMEOUT) {
+                result = tags;
+                break;
+            }
+            UINT written = 0;
+            if(*count >= UINT32_MAX / sizeof(*item)) result = FR_DENIED;
             else {
-                result = f_write(index, path, PATH_CAPACITY * sizeof(TCHAR), &written);
-                if(result == FR_OK && written != PATH_CAPACITY * sizeof(TCHAR)) result = FR_DISK_ERR;
+                result = f_write(index, item, sizeof(*item), &written);
+                if(result == FR_OK && written != sizeof(*item)) result = FR_DISK_ERR;
                 if(result != FR_OK)
                     LOGE("SD", "write index record %lu failed: FatFs=%d bytes=%u",
                          (unsigned long)*count, (int)result, written);
@@ -85,16 +107,23 @@ static FRESULT scan_directory(FIL *index, TCHAR *path, unsigned depth, uint32_t 
 
 FRESULT music_library_rebuild(uint32_t *total)
 {
-    char path[PATH_CAPACITY] = "0:/";
+    music_library_close();
+    music_info_t item;
+    memset(&item, 0, sizeof(item));
+    strcpy(item.path, "0:/");
     FIL index;
     uint32_t count = 0;
     *total = 0;
     FRESULT result = f_open(&index, s_index_path, FA_CREATE_ALWAYS | FA_WRITE);
     if(result != FR_OK) return result;
-    result = scan_directory(&index, path, 0, &count);
+    result = scan_directory(&index, &item, 0, &count);
     FRESULT closed = f_close(&index);
     if(result == FR_OK) result = closed;
     if(result == FR_OK) result = f_chmod(s_index_path, AM_HID, AM_HID);
+    if(result == FR_OK) {
+        result = f_open(&s_index, s_index_path, FA_READ);
+        s_index_open = result == FR_OK;
+    }
     if(result == FR_OK) *total = count;
     return result;
 }
@@ -146,30 +175,26 @@ FRESULT music_library_load(uint32_t total, uint32_t center, music_window_t *wind
     uint32_t last_first = total > MUSIC_WINDOW_COUNT ? total - MUSIC_WINDOW_COUNT : 0;
     if(first > last_first) first = last_first;
     UINT count = total - first > MUSIC_WINDOW_COUNT ? MUSIC_WINDOW_COUNT : total - first;
-    FIL index;
-    FRESULT result = f_open(&index, s_index_path, FA_READ);
-    if(result != FR_OK) return result;
-    result = f_lseek(&index, first * PATH_CAPACITY * sizeof(TCHAR));
+    /* 建库后保持索引打开，翻页不再查目录或打开音乐文件。 */
+    if(!s_index_open) {
+        FRESULT opened = f_open(&s_index, s_index_path, FA_READ);
+        if(opened != FR_OK) return opened;
+        s_index_open = true;
+    }
+    FRESULT result = f_lseek(&s_index, first * sizeof(music_info_t));
     for(UINT i = 0; result == FR_OK && i < count; ++i) {
         music_info_t *item = &window->items[i];
-        memset(item, 0, sizeof(*item));
         UINT read;
-        result = f_read(&index, item->path, sizeof(item->path), &read);
+        /* 每次只读一条记录，及时释放卷锁，让高优先级音频补数插入。 */
+        result = f_read(&s_index, item, sizeof(*item), &read);
         if(result != FR_OK) break;
-        if(read != sizeof(item->path) || item->path[PATH_CAPACITY - 1] != 0) result = FR_INT_ERR;
-        else {
-            item->type = music_type(item->path);
-            if(item->type == MUSIC_UNKNOWN) result = FR_INT_ERR;
-            else make_title(item);
-        }
+        if(read != sizeof(*item) || item->path[PATH_CAPACITY - 1] != 0 ||
+           item->title[sizeof(item->title) - 1] != 0 ||
+           item->artist[sizeof(item->artist) - 1] != 0 ||
+           item->album[sizeof(item->album) - 1] != 0 ||
+           item->type == MUSIC_UNKNOWN || item->type != music_type(item->path)) result = FR_INT_ERR;
     }
-    FRESULT closed = f_close(&index);
-    if(result == FR_OK) result = closed;
-    /* 关闭路径索引后逐首读标签，不在扫描阶段解析，不占用整库内存。 */
-    for(UINT i = 0; result == FR_OK && i < count; ++i) {
-        FRESULT tags = music_tags_read(&window->items[i]);
-        if(tags == FR_DISK_ERR || tags == FR_NOT_READY || tags == FR_TIMEOUT) result = tags;
-    }
+    if(result != FR_OK) music_library_close();
     if(result == FR_OK) {
         window->first_index = first;
         window->total = total;

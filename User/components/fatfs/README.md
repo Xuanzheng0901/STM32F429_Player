@@ -42,3 +42,5 @@ sdmmc.c 管理 HAL SD 初始化、扇区读写、DMA 完成队列和传输互斥
 传输等待每 10 ms 检查卡状态，读取到拔卡电平即锁存当前会话失效。错误/拔卡后先停止 DMA，再归还缓冲。上层也可用三次无卡采样确认移除；新卡由上层在关闭所有旧文件并卸载后调用 sdmmc_new_session，再重新初始化。该层不挂载文件系统，不调用 UI 或播放器。
 
 具体错误、超时、地址边界、分批和快速重插验证见 tests/fatfs_port/test_diskio.c。
+
+ffsystem.c 在卷/系统互斥锁等待超时时输出 volume、owner 和 held ticks，用于区分曲库长查找与底层读卡阻塞；FF_FS_TIMEOUT 仍为 1000 tick，不延长超时、不关闭互斥保护。

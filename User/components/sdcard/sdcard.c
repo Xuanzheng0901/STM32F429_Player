@@ -29,6 +29,7 @@ bool sdcard_is_removed(void)
 
 void sdcard_unmount(void)
 {
+    music_library_close();
     s_ready = false;
     s_total = 0;
     f_mount(NULL, "0:", 0);

@@ -2,8 +2,10 @@
 #include "ff.h"
 #include "diskio.h"
 #include "sdcard.h"
+#include "music_library.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <string.h>
 
 /* 独立卷测试中没有音频文件；由调用方处理卸载事件。 */
@@ -97,7 +99,7 @@ int main(void)
     }
     assert(found == 7);
     assert(f_stat("0:/music.idx", &info) == FR_OK);
-    assert(info.fsize == 3 * MUSIC_PATH_CAPACITY);
+    assert(info.fsize == 3 * sizeof(music_info_t));
     assert(sdcard_mount_and_scan() == FR_OK);
     assert(sdcard_load_music_window(0, &window) == FR_OK && window.total == 3);
     assert(mock_task_calls == 0);
@@ -167,8 +169,9 @@ int main(void)
     assert(uppercase_tracks >= 12);
 
     /* 损坏记录和短索引不能发布部分窗口；重新扫描可恢复。 */
+    music_library_close();
     assert(f_open(&file, "0:/music.idx", FA_WRITE) == FR_OK);
-    assert(f_lseek(&file, MUSIC_PATH_CAPACITY - 1) == FR_OK);
+    assert(f_lseek(&file, offsetof(music_info_t, path) + MUSIC_PATH_CAPACITY - 1) == FR_OK);
     assert(f_write(&file, "X", 1, &written) == FR_OK && written == 1);
     assert(f_close(&file) == FR_OK);
     assert(sdcard_load_music_window(0, &window) == FR_INT_ERR);
