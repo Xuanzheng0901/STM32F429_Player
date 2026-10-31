@@ -108,6 +108,18 @@ int main(int argc, char **argv)
         for(unsigned i = 0; i < HALF_FRAMES; ++i) assert(!s_dma[0][i]);
         usb_audio_set_mute(false); edge(); assert(usb_audio_audible());
         usb_audio_set_stream(false); edge(); assert(!usb_audio_audible());
+        usb_audio_set_stream(true);
+        uint32_t data[48];
+        for(unsigned i = 0; i < 48; ++i)
+            data[i] = (uint16_t)(i % 2 ? 30000 : -30000) |
+                      ((uint32_t)(uint16_t)(i % 2 ? -25000 : 25000) << 16);
+        for(unsigned i = 0; i < 32; ++i) usb_audio_receive((uint8_t *)data, sizeof(data));
+        unsigned half = s_half;
+        edge();
+        assert(s_read == HALF_FRAMES + 1U);
+        assert((int16_t)s_dma[half][0] == -30000 && (int16_t)(s_dma[half][0] >> 16) == 25000);
+        assert(s_dma[half][96] == 0);
+        assert((int16_t)s_dma[half][191] == -29687 && (int16_t)(s_dma[half][191] >> 16) == 24739);
         usb_audio_disconnect(); assert(!usb_audio_connected());
         usb_audio_stop(); assert(!usb_audio_running() && stops == 1);
         HAL_I2S_ErrorCallback(&hi2s2); assert(!notification);

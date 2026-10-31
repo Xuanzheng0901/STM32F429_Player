@@ -119,16 +119,26 @@ void usb_audio_poll(uint32_t timeout_ticks)
         usb_audio_stop();
         return;
     }
-    /* USB 与 I2S 晶振有微小偏差，积压时每次补数丢一帧，避免长时间播放溢出。 */
+    /* 积压时把 193 帧平滑压成 192 帧，补偿时钟偏差，避免直接跳帧产生咔声。 */
     taskENTER_CRITICAL();
     uint32_t available = s_write - s_read;
     if(!s_stream || !s_locked || available < HALF_FRAMES) s_primed = false;
     if(s_stream && s_locked && available >= PREFILL_FRAMES) s_primed = true;
     if(s_primed) {
-        if(available > HALF_FRAMES * 6U) ++s_read;
-        for(unsigned i = 0; i < HALF_FRAMES; ++i)
-            s_dma[s_half][i] = s_muted ? 0 : s_fifo[(s_read + i) & (FIFO_FRAMES - 1U)];
-        s_read += HALF_FRAMES;
+        bool adjust = available > HALF_FRAMES * 6U;
+        for(unsigned i = 0; i < HALF_FRAMES; ++i) {
+            uint32_t sample = s_fifo[(s_read + i) & (FIFO_FRAMES - 1U)];
+            if(adjust) {
+                uint32_t next = s_fifo[(s_read + i + 1U) & (FIFO_FRAMES - 1U)];
+                int32_t left = (int16_t)sample * (int32_t)(HALF_FRAMES - i) + (int16_t)next * (int32_t)i;
+                int32_t right = (int16_t)(sample >> 16) * (int32_t)(HALF_FRAMES - i) +
+                                (int16_t)(next >> 16) * (int32_t)i;
+                sample = (uint16_t)(left / (int32_t)HALF_FRAMES) |
+                         ((uint32_t)(uint16_t)(right / (int32_t)HALF_FRAMES) << 16);
+            }
+            s_dma[s_half][i] = s_muted ? 0 : sample;
+        }
+        s_read += HALF_FRAMES + adjust;
     }
     taskEXIT_CRITICAL();
     if(s_edges != s_expected) {
