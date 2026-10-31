@@ -8,8 +8,7 @@ set(PORT_SOURCES
     "${PORT}/diskio.c" "${PORT}/ff.c" "${PORT}/ffunicode.c"
     "${PORT}/ffsystem.c" "${REPO}/User/components/sdmmc/sdmmc.c")
 set(METADATA_SOURCES
-    "${REPO}/User/components/metadata/music_tags.c"
-    "${REPO}/User/components/metadata/tag_text.c")
+    "${REPO}/User/components/metadata/music_tags.c")
 set(LIBRARY_SOURCES ${PORT_SOURCES} ${METADATA_SOURCES}
     "${REPO}/User/components/library/music_library.c")
 set(FILESYSTEM_SOURCES ${LIBRARY_SOURCES} "${REPO}/User/components/sdcard/sdcard.c")

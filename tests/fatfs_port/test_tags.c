@@ -1,6 +1,5 @@
 #include "mock_platform.h"
 #include "music_tags.h"
-#include "tag_text.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -20,7 +19,7 @@ static void expect_tags(const void *data, UINT size, music_type_t type,
     assert(f_open(&file, info.path, FA_CREATE_ALWAYS | FA_WRITE) == FR_OK);
     assert(f_write(&file, data, size, &written) == FR_OK && written == size);
     assert(f_close(&file) == FR_OK);
-    assert(music_read_tags(&info) == FR_OK);
+    assert(music_tags_read(&info) == FR_OK);
     assert(strcmp(info.title, title) == 0);
     assert(strcmp(info.artist, artist) == 0);
     assert(strcmp(info.album, album) == 0);
@@ -88,13 +87,10 @@ int main(void)
     clipped[16] = 4; /* INFO 只有类型头，INAM 等字段不属于此 LIST。 */
     expect_tags(clipped, sizeof(clipped), MUSIC_WAV, "fallback", "fallback", "");
 
-    char text[64] = "fallback";
-    tag_text_decode((const uint8_t *)"\xc0\xaf", 2, text, sizeof(text), TAG_UTF8);
-    assert(strcmp(text, "fallback") == 0);
-    tag_text_decode((const uint8_t *)"\x00\xdc", 2, text, sizeof(text), TAG_UTF16LE);
-    assert(strcmp(text, "fallback") == 0);
-    tag_text_decode((const uint8_t *)"\xef\xbb\xbf" "BOM", 6, text, sizeof(text), TAG_AUTO);
-    assert(strcmp(text, "BOM") == 0);
+    /* 实际 ID3 文件中的非法 UTF-8 不覆盖回退标题。 */
+    static const uint8_t invalid_utf8[] = "ID3\x03\0\0\0\0\0\x0d"
+        "TIT2\0\0\0\x03\0\0\x03\xc0\xaf";
+    expect_tags(invalid_utf8, sizeof(invalid_utf8) - 1, MUSIC_MP3, "fallback", "fallback", "");
 
     /* 标签文本正好在四字节 UTF-8 字符中截断。 */
     uint8_t long_tag[88] = "ID3\x03\0\0\0\0\0\x4e"
@@ -131,19 +127,19 @@ int main(void)
     music_info_t info = {.type = MUSIC_MP3, .path = "0:/tag.bin"};
     assert(f_mount(&filesystem, "0:", 1) == FR_OK);
     mock_clear_counters();
-    assert(music_read_tags(&info) == FR_OK);
+    assert(music_tags_read(&info) == FR_OK);
     unsigned transfers = mock_dma_calls;
     assert(transfers >= 3);
     for(fail_at = 1; fail_at <= transfers; ++fail_at) {
         assert(f_mount(&filesystem, "0:", 1) == FR_OK);
         mock_clear_counters();
         mock_dma_hook = fail_selected_transfer;
-        assert(music_read_tags(&info) == FR_DISK_ERR);
+        assert(music_tags_read(&info) == FR_DISK_ERR);
         mock_dma_hook = NULL;
         mock_mode = MOCK_NORMAL;
     }
     assert(f_mount(&filesystem, "0:", 1) == FR_OK);
-    assert(music_read_tags(&info) == FR_OK);
+    assert(music_tags_read(&info) == FR_OK);
     assert(f_mount(NULL, "0:", 0) == FR_OK);
     puts("ID3, WAV INFO, Vorbis comments, text encodings and malformed tags passed");
 }

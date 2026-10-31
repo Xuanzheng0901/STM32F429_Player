@@ -1,4 +1,4 @@
-#include "diskio.h"
+#include "sdmmc.h"
 #include "sdio.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -26,6 +26,11 @@ static QueueHandle_t s_events;
 static StaticQueue_t s_queue_storage;
 static uint8_t s_queue_buffer[EVENT_COUNT * sizeof(uint32_t)];
 static _Alignas(4) uint8_t s_bounce[BOUNCE_SECTORS * SDMMC_SECTOR_SIZE];
+
+bool sdmmc_detected(void)
+{
+    return HAL_GPIO_ReadPin(SDIO_CD_GPIO_Port, SDIO_CD_Pin) == GPIO_PIN_RESET;
+}
 
 static bool card_present(void)
 {

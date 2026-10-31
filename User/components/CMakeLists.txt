@@ -6,6 +6,10 @@ file(GLOB COMPONENT_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_LIST_DIR}/es9018/*.c
         ${CMAKE_CURRENT_LIST_DIR}/main/*.c
         ${CMAKE_CURRENT_LIST_DIR}/fatfs/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/sdmmc/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/sdcard/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/library/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/metadata/*.c
 )
 
 add_library(user_components INTERFACE)
@@ -18,5 +22,10 @@ target_include_directories(user_components INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/display/lvgl_port
         ${CMAKE_CURRENT_LIST_DIR}/es9018
         ${CMAKE_CURRENT_LIST_DIR}/fatfs
+        ${CMAKE_CURRENT_LIST_DIR}/sdmmc
+        ${CMAKE_CURRENT_LIST_DIR}/sdcard
+        ${CMAKE_CURRENT_LIST_DIR}/library
+        ${CMAKE_CURRENT_LIST_DIR}/metadata
+        ${CMAKE_CURRENT_LIST_DIR}/player
 
 )

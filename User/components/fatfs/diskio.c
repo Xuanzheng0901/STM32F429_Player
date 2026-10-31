@@ -1,5 +1,6 @@
 #include "ff.h"
 #include "diskio.h"
+#include "sdmmc.h"
 
 static DSTATUS disk_state(sdmmc_state_t state)
 {
