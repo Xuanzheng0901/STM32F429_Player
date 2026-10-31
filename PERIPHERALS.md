@@ -183,7 +183,7 @@ NVIC 分组为 Priority Group 4，子优先级均为 0。
 
 FatFs 使用用户组件中的 R0.16，CubeMX FatFs 关闭。逻辑盘 `0:` 对应 SDIO SD 卡，路径使用 UTF-8；卷互斥和长文件名工作区使用 FreeRTOS。磁盘适配通过独立 `sdmmc` 块设备调用 ST HAL SDIO，普通 SRAM 中的 4096 字节中转区处理 CCMRAM 和未对齐缓冲。
 
-卡检测、消抖和扇区通信由 `sdmmc` 管理，`diskio` 只适配 FatFs 接口；`music_library` 管理扫描和索引，`metadata` 解析标签；`sdcard` 管理挂载、曲库互斥和卸载，通过 `SDCARD_EVENT_REMOVING` / `SDCARD_EVENT_REMOVED` 通知文件使用方归还资源及前端更新状态。播放器通过回调接收事件。
+卡检测和扇区通信由 sdmmc 管理，diskio 只适配 FatFs 接口；library 管理扫描和索引，metadata 解析标签，sdcard 管理卷和插拔事件。播放器在收到音频停止确认后卸载卷，通过回调更新 UI。插卡稳定后自动挂载和扫描。
 
 配置、接口与调用流程见 [FatFs 移植文档](User/components/fatfs/README.md)。 拔卡生命周期见 [SD 文件管理文档](User/components/sdcard/README.md)。
 
@@ -204,5 +204,5 @@ cmake --build --preset Release -j 8
 
 | 配置    |     SRAM |   CCMRAM |    Flash |
 |---------|---------:|---------:|---------:|
-| Debug   | 24,384 B | 65,536 B | 63,644 B |
-| Release | 24,376 B | 65,536 B | 33,428 B |
+| Debug   | 160,152 B | 65,536 B | 586,676 B |
+| Release | 160,144 B | 65,536 B | 527,292 B |

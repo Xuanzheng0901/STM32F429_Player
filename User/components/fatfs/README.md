@@ -1,12 +1,14 @@
 # FatFs R0.16 适配
 
-`fatfs_port` 静态库由 R0.16 原版 `ff.c`、`ffunicode.c`、工程配置 `ffconf.h`、FreeRTOS 适配 `ffsystem.c` 和磁盘接口 `diskio.c` 组成。旧版参考文件保留在 `legacy/`，不参与构建。
+原版 ff.c、ffunicode.c，加上工程配置 ffconf.h、FreeRTOS 适配 ffsystem.c 和磁盘适配 diskio.c，组成文件系统组件。旧版 FatFs 和 CubeMX 生成适配文件已移除。
 
-调用关系：`FatFs → diskio.c → sdmmc → HAL`。`diskio.c` 只转换盘号 0 的状态和返回值，不操作 GPIO、DMA、队列或卡检测。硬件配置及 DMA 策略见 [sdmmc](../sdmmc/README.md)。
+调用链：player → sdcard → library / metadata → FatFs → diskio → sdmmc → HAL。全部用户组件由 User/components/CMakeLists.txt 纳入主程序。diskio 只转换状态和返回值；硬件配置和 DMA 策略见 [sdmmc](../sdmmc/README.md)。
 
-`disk_ioctl()` 支持 CTRL_SYNC、GET_SECTOR_COUNT、GET_SECTOR_SIZE、GET_BLOCK_SIZE，扇区固定 512 字节，擦除块按 FatFs 约定返回 1 个扇区，TRIM 关闭。
+卷由 sdcard.c 私有持有。所有挂载、扫描和卸载在曲库任务中进行；音频任务持有播放 FIL。卸载前，曲库任务向音频任务发出停止命令并等待关闭确认，随后才调用 f_mount(NULL)。不创建额外的卡检测任务，不在定时器回调里读写文件。
 
-卷由 `sdcard.c` 私有持有，调度器运行后调用 `f_mount()` 挂载。FatFs 文件直接使用 R0.16 的 UTF-8 API；文件所有者持有 FIL 并负责关闭。卷互斥、文件锁表锁由 `ffsystem.c` 提供；长文件名工作区使用 FreeRTOS 堆，位于 CCMRAM。
+FatFs 原生使用 UTF-8 路径。卷互斥、文件锁表锁由 ffsystem.c 提供；长文件名工作区使用 CCMRAM 中的 FreeRTOS 堆，SDIO 通过普通 SRAM 中转区读写这些内存。
+
+disk_ioctl 支持 CTRL_SYNC、GET_SECTOR_COUNT、GET_SECTOR_SIZE、GET_BLOCK_SIZE。扇区固定 512 字节，擦除块返回 1 扇区，TRIM 关闭。
 
 | 配置 | 值 |
 | --- | --- |
@@ -25,15 +27,6 @@
 | FF_FS_TIMEOUT | 1000 ticks，当前为 1000 ms |
 | FF_FS_NORTC | 1，时间固定为 2026-01-01 |
 
-CubeMX FatFs 关闭，保留 SDIO、GPIO、DMA 和 FreeRTOS。主工程链接 `user_components → music_library → music_metadata → fatfs_port → sdmmc`，各库显式声明依赖，旧生成的 FatFs 不参与编译。
+CubeMX FatFs 保持关闭；Core/Src/sdio.c 只填写句柄配置，实际卡初始化由任务中的 f_mount 发起。重新生成外设代码时，仍需保证启动阶段不调用 HAL_SD_Init 或 HAL_SD_ConfigWideBusOperation 进入无卡错误死循环。
 
-```powershell
-cmake --preset Debug
-cmake --build --preset Debug -j 8
-cmake --preset Release
-cmake --build --preset Release -j 8
-```
-
-强制保留 `sdcard_mount_and_scan`、`sdcard_load_music_window`、`disk_ioctl`、`f_mkfs` 的 Debug 完整链接：SRAM 29,912 B，CCMRAM 65,536 B，Flash 276,144 B。`sdmmc.c` 的 `s_bounce` 位于 `0x20005D8C`，4096 B；FreeRTOS `ucHeap` 位于 `0x10000000`，65536 B。普通启动入口暂未调用播放器，完整链接用于防止未接入功能被裁掉而掩盖链接问题。
-
-[主机测试](../../../tests/fatfs_port/README.md) 覆盖 UTF-8 文件读写、标签、曲库、DMA 及拔卡。主机结果不能代替实体 SD 卡和板上验证。
+应用已接入正常启动入口，无需强制保留符号来验证链接。构建及资源占用见 [应用说明](../README.md)，主机验证见 [文件模块测试](../../../tests/fatfs_port/README.md)。
