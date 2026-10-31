@@ -1,5 +1,5 @@
-#ifndef F407_PLAYER_AUDIO_I2S_H
-#define F407_PLAYER_AUDIO_I2S_H
+#ifndef PLAYER_AUDIO_I2S_H
+#define PLAYER_AUDIO_I2S_H
 
 #include <stdbool.h>
 #include "i2s.h"

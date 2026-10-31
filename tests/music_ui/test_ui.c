@@ -311,6 +311,9 @@ int main(void)
         assert(!strcmp(lv_label_get_text(title_label), "\u7D05\u73AB\u7470(\u570B)"));
         assert(!strcmp(lv_label_get_text(artist_label), "Eason Chan"));
     }
+    assert(UI_set_music_error());
+    assert(UI_set_player_status(0, &window.items[0], 0, true));
+    assert(!strcmp(lv_label_get_text(status_label), "正在播放"));
     UI_set_media_state(PLAYER_NO_CARD);
     assert(!total_tracks && !playing && !library_ready);
     assert(!strcmp(lv_label_get_text(title_label), "未插卡"));

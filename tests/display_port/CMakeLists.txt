@@ -8,7 +8,7 @@ foreach(MODE RANGE 0 2)
         "${REPO}/User/components/display/stm_ssd1685/ssd1685.c")
     target_include_directories(ssd1685_${MODE} PRIVATE mocks
         "${REPO}/User/components/display/stm_ssd1685")
-    target_compile_definitions(ssd1685_${MODE} PRIVATE SSD1685_REFRESH_MODE=${MODE})
+    target_compile_definitions(ssd1685_${MODE} PRIVATE TEST_REFRESH_MODE=${MODE})
     add_test(NAME ssd1685_${MODE} COMMAND ssd1685_${MODE})
 endforeach()
 

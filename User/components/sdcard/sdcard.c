@@ -48,6 +48,7 @@ FRESULT sdcard_mount_and_scan(void)
 FRESULT sdcard_load_music_window(uint32_t center, music_window_t *window)
 {
     if(s_ready && !sdcard_is_removed()) return music_library_load(s_total, center, window);
-    *window = (music_window_t){0};
+    window->count = 0;
+    window->first_index = window->total = 0;
     return FR_NOT_READY;
 }

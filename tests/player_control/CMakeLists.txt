@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.22)
+project(player_control_tests C)
+enable_testing()
+get_filename_component(REPO "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+add_executable(player_control test_control.c "${REPO}/User/components/player/player.c")
+target_include_directories(player_control PRIVATE mocks "${REPO}/User/components/player"
+    "${REPO}/User/components/sdcard" "${REPO}/User/components/fatfs")
+target_compile_options(player_control PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+add_test(NAME control COMMAND player_control)
+add_test(NAME headless COMMAND player_control headless)

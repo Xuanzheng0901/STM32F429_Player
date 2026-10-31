@@ -1,5 +1,5 @@
-#ifndef F407_MP3_DECODER_H
-#define F407_MP3_DECODER_H
+#ifndef MP3_DECODER_H
+#define MP3_DECODER_H
 
 #include "music.h"
 

@@ -1,5 +1,5 @@
-#ifndef F407_FLAC_DECODER_H
-#define F407_FLAC_DECODER_H
+#ifndef FLAC_DECODER_H
+#define FLAC_DECODER_H
 
 #include "music.h"
 

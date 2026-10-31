@@ -154,7 +154,8 @@ static void music_task(void *argument)
         if(event == SDCARD_REMOVED) {
             stop_audio();
             sdcard_unmount();
-            s_window = (music_window_t){0};
+            s_window.count = 0;
+            s_window.first_index = s_window.total = 0;
             if(s_callbacks.media) s_callbacks.media(PLAYER_NO_CARD);
             LOGI("SD", "card removed");
         }

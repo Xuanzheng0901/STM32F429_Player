@@ -158,6 +158,7 @@ static void draw(void)
 
 int main(void)
 {
+    ssd1685_set_refresh_mode(TEST_REFRESH_MODE);
     memset(frame,0xFF,sizeof(frame));
     frame[0]=0x7F; frame[sizeof(frame)-1]=0xFE;
     draw(); /* Cold draw initializes itself and establishes a full base. */
@@ -166,16 +167,16 @@ int main(void)
     draw(); assert(operations==before);
     frame[120*23+7]^=0xAA;
     draw();
-#if SSD1685_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
+#if TEST_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
     assert(resets==1 && update==0x1C && xs==0 && xe==22 && ys==359 && ye==0);
-#elif SSD1685_REFRESH_MODE == SSD1685_REFRESH_FAST
+#elif TEST_REFRESH_MODE == SSD1685_REFRESH_FAST
     assert(resets==2 && update==0xC7 && fasts==1 && !power);
 #else
     assert(resets==2 && update==0xF4 && !fasts);
 #endif
     frame[40*23+2]=0xAA; frame[42*23+3]=0x55;
     draw();
-#if SSD1685_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
+#if TEST_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
     assert(xs==0 && xe==22 && ys==359 && ye==0);
 #endif
     for(unsigned i=0; i<12; ++i)
@@ -184,7 +185,7 @@ int main(void)
         frame[index]^=(uint8_t)(1U<<(i%8));
         draw();
     }
-#if SSD1685_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
+#if TEST_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
     assert(resets==1 && partials==14); /* No implicit periodic full refresh. */
 #endif
     /* Cross a chunk boundary, end on one, then cover the entire panel. */
@@ -197,7 +198,7 @@ int main(void)
         frame[last*23+22]^=0x01;
         unsigned chunks_before=chunk_calls;
         draw();
-#if SSD1685_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
+#if TEST_REFRESH_MODE == SSD1685_REFRESH_PARTIAL
         assert(xs==0 && xe==22 && ys==359 && ye==0);
         assert(chunk_calls-chunks_before==2*((360+15)/16));
 #else
@@ -224,7 +225,8 @@ int main(void)
     ssd1685_deep_sleep(); assert(!power && power_offs==1);
     before_reset=resets; before_refresh=refreshes;
     draw(); assert(resets==before_reset+1 && refreshes==before_refresh+1 && update==0xF4);
-    ssd1685_init(); before_reset=resets;
+    ssd1685_init();
+    ssd1685_set_refresh_mode(TEST_REFRESH_MODE); before_reset=resets;
     draw(); assert(resets==before_reset && update==0xF4);
     enum { stride=360/8+3 };
     uint8_t source[stride*184];
@@ -251,5 +253,5 @@ int main(void)
     frame[359*23+22]^=0x01; draw();
     assert(update==0x1C && power);
     assert(write_received==write_size && chunk_calls>0 && tail_calls>0);
-    printf("PASS mode %d: chunk reuse/boundaries/tails, immutable source, exact random-frame diff, init/BUSY, RAM/OLD sync, mode switches, sleep, padded I1\n",SSD1685_REFRESH_MODE);
+    printf("PASS mode %d: chunk reuse/boundaries/tails, immutable source, exact random-frame diff, init/BUSY, RAM/OLD sync, mode switches, sleep, padded I1\n",TEST_REFRESH_MODE);
 }

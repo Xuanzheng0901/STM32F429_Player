@@ -15,6 +15,9 @@ file(GLOB COMPONENT_SOURCES CONFIGURE_DEPENDS
 )
 
 # 只给实时解码器单独优化。
+set_source_files_properties(${COMPONENT_SOURCES}
+    TARGET_DIRECTORY ${CMAKE_PROJECT_NAME}
+    PROPERTIES COMPILE_OPTIONS "-fstack-usage")
 set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/player/mp3_decoder.c
     TARGET_DIRECTORY ${CMAKE_PROJECT_NAME}
     PROPERTIES COMPILE_OPTIONS "-Os;-fstack-usage;-fno-strict-aliasing")

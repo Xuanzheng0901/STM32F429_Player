@@ -1,5 +1,5 @@
-#ifndef F407_DECODER_MEMORY_H
-#define F407_DECODER_MEMORY_H
+#ifndef DECODER_MEMORY_H
+#define DECODER_MEMORY_H
 
 #include <stddef.h>
 

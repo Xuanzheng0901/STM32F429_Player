@@ -205,6 +205,7 @@ bool UI_set_player_status(uint32_t index, const music_info_t *info,
         lvgl_port_unlock();
         return false;
     }
+    library_error = false;
     current_info = *info;
     current_track = index;
     elapsed = elapsed_seconds;
@@ -315,100 +316,98 @@ void UI_init(void)
     /* 首帧直接全刷完整播放器，不发送初始化期间的空白画面。 */
     disp_disable_update();
     lv_port_disp_init();
-    if(lvgl_port_lock(portMAX_DELAY))
+    if(!lvgl_port_lock(portMAX_DELAY)) return;
+    lv_obj_t *screen = lv_screen_active();
+    lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
+    lv_obj_set_style_text_color(screen, lv_color_black(), 0);
+    lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+
+    ssd1685_set_refresh_mode(SSD1685_REFRESH_PARTIAL);
+    const lv_font_t *small = &fusion_pixel_12_cjk;
+    lv_obj_set_style_text_font(screen, small, 0);
+    lv_obj_set_style_text_align(screen, LV_TEXT_ALIGN_LEFT, 0);
+    lv_style_init(&block_style);
+    lv_style_set_bg_color(&block_style, lv_color_black());
+    lv_style_set_bg_opa(&block_style, LV_OPA_COVER);
+    player_group = lv_group_create();
+    lv_group_set_wrap(player_group, false);
+
+    /* 顶部状态栏；MUSIC 保留普通文字，不加底框。 */
+    ui_label(screen, "MUSIC", small, 12, 5, 46, 17, LV_TEXT_ALIGN_LEFT, false);
+    status_label = ui_label(screen, "已暂停", small, 67, 5, 48, 17, LV_TEXT_ALIGN_CENTER, false);
+    index_label = ui_label(screen, "0 / 0", small, 129, 5, 72, 17, LV_TEXT_ALIGN_LEFT, false);
+    ui_label(screen, "--", small, 293, 5, 18, 17, LV_TEXT_ALIGN_CENTER, false);
+    ui_block(screen, 319, 8, 26, 11, false);
+    ui_block(screen, 320, 9, 24, 9, true);
+    ui_block(screen, 322, 11, 20, 5, false);
+    ui_block(screen, 345, 11, 3, 5, false);
+    ui_block(screen, 12, 26, 336, 1, false);
+
+    /* 后台索引完成后填入歌曲信息，不启动音频播放。 */
+    ui_image(screen, &music_player_record, 14, 35);
+    title_label = ui_label(screen, "", &fusion_pixel_12_cjk, 112, 35, 108, 22, LV_TEXT_ALIGN_LEFT, false);
+    artist_label = ui_label(screen, "", small, 112, 65, 108, 11, LV_TEXT_ALIGN_LEFT, false);
+    album_label = ui_label(screen, "", small, 112, 83, 108, 11, LV_TEXT_ALIGN_LEFT, false);
+    ui_block(screen, 112, 103, 30, 13, false);
+    format_label = ui_label(screen, "--", small, 112, 103, 30, 13, LV_TEXT_ALIGN_CENTER, true);
+    audio_label = ui_label(screen, "--", small, 151, 103, 69, 13, LV_TEXT_ALIGN_LEFT, false);
+
+    const int32_t progress_x = 12;
+    ui_block(screen, 12, 129, 205, 1, false);
+    progress_fill = ui_block(screen, 12, 128, progress_x - 12 + 1, 3, false);
+    progress_knob = ui_block(screen, progress_x - 2, 126, 5, 7, false);
+    elapsed_label = ui_label(screen, "00:00", small, 12, 136, 48, 11, LV_TEXT_ALIGN_LEFT, false);
+    duration_label = ui_label(screen, "00:00", small, 169, 136, 48, 11, LV_TEXT_ALIGN_RIGHT, false);
+
+    /* 左侧控制图标中心为 (22/68/114/160/206, 165)，等距 46 px。 */
+    const lv_image_dsc_t *const controls[] = {
+        &music_player_repeat, &music_player_previous, &music_player_pause,
+        &music_player_next, &music_player_list,
+    };
+    for(uintptr_t i = 0; i < 5; i++)
     {
-        lv_obj_t *screen = lv_screen_active();
-        lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
-        lv_obj_set_style_text_color(screen, lv_color_black(), 0);
-        lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
-
-        ssd1685_set_refresh_mode(SSD1685_REFRESH_PARTIAL);
-        const lv_font_t *small = &fusion_pixel_12_cjk;
-        lv_obj_set_style_text_font(screen, small, 0);
-        lv_obj_set_style_text_align(screen, LV_TEXT_ALIGN_LEFT, 0);
-        lv_style_init(&block_style);
-        lv_style_set_bg_color(&block_style, lv_color_black());
-        lv_style_set_bg_opa(&block_style, LV_OPA_COVER);
-        player_group = lv_group_create();
-        lv_group_set_wrap(player_group, false);
-
-        /* 顶部状态栏；MUSIC 保留普通文字，不加底框。 */
-        ui_label(screen, "MUSIC", small, 12, 5, 46, 17, LV_TEXT_ALIGN_LEFT, false);
-        status_label = ui_label(screen, "已暂停", small, 67, 5, 48, 17, LV_TEXT_ALIGN_CENTER, false);
-        index_label = ui_label(screen, "0 / 0", small, 129, 5, 72, 17, LV_TEXT_ALIGN_LEFT, false);
-        ui_label(screen, "--", small, 293, 5, 18, 17, LV_TEXT_ALIGN_CENTER, false);
-        ui_block(screen, 319, 8, 26, 11, false);
-        ui_block(screen, 320, 9, 24, 9, true);
-        ui_block(screen, 322, 11, 20, 5, false);
-        ui_block(screen, 345, 11, 3, 5, false);
-        ui_block(screen, 12, 26, 336, 1, false);
-
-        /* 后台索引完成后填入歌曲信息，不启动音频播放。 */
-        ui_image(screen, &music_player_record, 14, 35);
-        title_label = ui_label(screen, "", &fusion_pixel_12_cjk, 112, 35, 108, 22, LV_TEXT_ALIGN_LEFT, false);
-        artist_label = ui_label(screen, "", small, 112, 65, 108, 11, LV_TEXT_ALIGN_LEFT, false);
-        album_label = ui_label(screen, "", small, 112, 83, 108, 11, LV_TEXT_ALIGN_LEFT, false);
-        ui_block(screen, 112, 103, 30, 13, false);
-        format_label = ui_label(screen, "--", small, 112, 103, 30, 13, LV_TEXT_ALIGN_CENTER, true);
-        audio_label = ui_label(screen, "--", small, 151, 103, 69, 13, LV_TEXT_ALIGN_LEFT, false);
-
-        const int32_t progress_x = 12;
-        ui_block(screen, 12, 129, 205, 1, false);
-        progress_fill = ui_block(screen, 12, 128, progress_x - 12 + 1, 3, false);
-        progress_knob = ui_block(screen, progress_x - 2, 126, 5, 7, false);
-        elapsed_label = ui_label(screen, "00:00", small, 12, 136, 48, 11, LV_TEXT_ALIGN_LEFT, false);
-        duration_label = ui_label(screen, "00:00", small, 169, 136, 48, 11, LV_TEXT_ALIGN_RIGHT, false);
-
-        /* 左侧控制图标中心为 (22/68/114/160/206, 165)，等距 46 px。 */
-        const lv_image_dsc_t *const controls[] = {
-            &music_player_repeat, &music_player_previous, &music_player_pause,
-            &music_player_next, &music_player_list,
-        };
-        for(uintptr_t i = 0; i < 5; i++)
-        {
-            const int32_t x = i == 2 ? 99 : 12 + (int32_t)i * 46;
-            lv_obj_t *control = ui_image(screen, controls[i], x, i == 2 ? 150 : 155);
-            if(i == 2) play_icon = control;
-            lv_obj_add_flag(control, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_add_event_cb(control, ui_action, LV_EVENT_CLICKED, (void *)i);
-        }
-        repeat_label = ui_label(screen, "1", small, 20, 159, 6, 11, LV_TEXT_ALIGN_CENTER, false);
-
-        /* 列表焦点反白，播放标记独立于焦点；按下选曲后才切换歌曲。 */
-        ui_block(screen, 229, 35, 1, 142, false);
-        ui_label(screen, "音乐列表", small, 240, 35, 72, 11, LV_TEXT_ALIGN_LEFT, false);
-        list_count_label = ui_label(screen, "0", small, 312, 35, 36, 11, LV_TEXT_ALIGN_RIGHT, false);
-        ui_block(screen, 240, 49, 108, 1, false);
-        for(uintptr_t i = 0; i < PLAYER_TRACK_COUNT; i++)
-        {
-            const int32_t y = 54 + (int32_t)i * 24;
-            lv_obj_t *row = ui_block(screen, 238, y, 110, 23, false);
-            track_rows[i] = row;
-            lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
-            lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_FOCUSED);
-            lv_obj_set_style_text_color(row, lv_color_black(), 0);
-            lv_obj_set_style_text_color(row, lv_color_white(), LV_STATE_FOCUSED);
-            lv_obj_t *name = ui_label(row, "", small, 6, 0, 83, 23, LV_TEXT_ALIGN_LEFT, false);
-            lv_obj_set_style_anim_duration(name, lv_anim_speed(20), 0);
-            track_names[i] = name;
-            lv_obj_t *marker = ui_label(row, "", small, 96, 0, 6, 23, LV_TEXT_ALIGN_CENTER, false);
-            track_markers[i] = marker;
-            lv_obj_remove_local_style_prop(name, LV_STYLE_TEXT_COLOR, 0);
-            lv_obj_remove_local_style_prop(marker, LV_STYLE_TEXT_COLOR, 0);
-            lv_obj_add_event_cb(row, ui_action, LV_EVENT_CLICKED, (void *)(i + 5));
-            if(i == PLAYER_TRACK_CENTER) {
-                lv_obj_add_event_cb(row, ui_action, LV_EVENT_KEY, (void *)(i + 5));
-                lv_group_add_obj(player_group, row);
-            }
-            lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
-        }
-        lv_group_set_editing(player_group, true);
-        current_info.type = MUSIC_UNKNOWN;
-        ui_encoder_init(player_group);
-        ui_update();
-        disp_enable_update();
-        lv_refr_now(NULL);
-        lvgl_port_unlock();
+        const int32_t x = i == 2 ? 99 : 12 + (int32_t)i * 46;
+        lv_obj_t *control = ui_image(screen, controls[i], x, i == 2 ? 150 : 155);
+        if(i == 2) play_icon = control;
+        lv_obj_add_flag(control, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(control, ui_action, LV_EVENT_CLICKED, (void *)i);
     }
+    repeat_label = ui_label(screen, "1", small, 20, 159, 6, 11, LV_TEXT_ALIGN_CENTER, false);
+
+    /* 列表焦点反白，播放标记独立于焦点；按下选曲后才切换歌曲。 */
+    ui_block(screen, 229, 35, 1, 142, false);
+    ui_label(screen, "音乐列表", small, 240, 35, 72, 11, LV_TEXT_ALIGN_LEFT, false);
+    list_count_label = ui_label(screen, "0", small, 312, 35, 36, 11, LV_TEXT_ALIGN_RIGHT, false);
+    ui_block(screen, 240, 49, 108, 1, false);
+    for(uintptr_t i = 0; i < PLAYER_TRACK_COUNT; i++)
+    {
+        const int32_t y = 54 + (int32_t)i * 24;
+        lv_obj_t *row = ui_block(screen, 238, y, 110, 23, false);
+        track_rows[i] = row;
+        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_FOCUSED);
+        lv_obj_set_style_text_color(row, lv_color_black(), 0);
+        lv_obj_set_style_text_color(row, lv_color_white(), LV_STATE_FOCUSED);
+        lv_obj_t *name = ui_label(row, "", small, 6, 0, 83, 23, LV_TEXT_ALIGN_LEFT, false);
+        lv_obj_set_style_anim_duration(name, lv_anim_speed(20), 0);
+        track_names[i] = name;
+        lv_obj_t *marker = ui_label(row, "", small, 96, 0, 6, 23, LV_TEXT_ALIGN_CENTER, false);
+        track_markers[i] = marker;
+        lv_obj_remove_local_style_prop(name, LV_STYLE_TEXT_COLOR, 0);
+        lv_obj_remove_local_style_prop(marker, LV_STYLE_TEXT_COLOR, 0);
+        lv_obj_add_event_cb(row, ui_action, LV_EVENT_CLICKED, (void *)(i + 5));
+        if(i == PLAYER_TRACK_CENTER) {
+            lv_obj_add_event_cb(row, ui_action, LV_EVENT_KEY, (void *)(i + 5));
+            lv_group_add_obj(player_group, row);
+        }
+        lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_group_set_editing(player_group, true);
+    current_info.type = MUSIC_UNKNOWN;
+    ui_encoder_init(player_group);
+    ui_update();
+    disp_enable_update();
+    lv_refr_now(NULL);
+    lvgl_port_unlock();
 }
