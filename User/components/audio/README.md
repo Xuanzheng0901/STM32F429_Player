@@ -18,6 +18,9 @@ USB 收到主机复位或 SOF 后独占 I2S2，先停止并关闭 SD 文件。�
 
 `usb_audio.c` 单独启用 -O2，额外静态 SRAM 约 12.5 KiB，RTOS 动态堆不变。Release 普通 SRAM 剩余 9120 B。主机验证覆盖描述符、完整 32 位半字顺序、满幅正负插值、短包/长包/非对齐输入、溢出和欠载、流重启竞态，以及 400 秒模拟漂移。真实主机枚举、USB 丢包、DAC 输出及 4 ms 补数余量仍需上板验证。
 
+以上 `-O2` 指 Debug/Release。`Optimized` 预设改为 FLAC、MP3、文件 PCM 读取转换、
+文件补数及 USB 补数使用 `-O3`，其余代码使用 `-Os`；编译参数及体积见上级 README。
+
 刷入后重新插拔 USB，在电脑播放设备中选择双声道 32 位/96000 Hz；当前只声明此固定格式，不提供 48k/16b 备用 alternate setting。
 
 规范参考：[USB Audio Data Formats 1.0](https://www.usb.org/sites/default/files/frmts10.pdf)、[Full Speed 等时带宽](https://source.android.com/docs/core/audio/usb)、[STM32F429 数据手册](https://www.st.com/resource/en/datasheet/stm32f429ie.pdf)。

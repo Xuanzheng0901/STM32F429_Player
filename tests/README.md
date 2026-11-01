@@ -34,3 +34,21 @@ UI 测试按新布局检查左侧高亮边缘、浏览时右侧播放器像素�
 堆预算测试使用生产 heap_4 分配器，运行命令和边界见 [heap_budget](heap_budget/README.md)。
 
 电池套件使用 `tests/battery / build/battery-tests`，不需要音频夹具。
+
+`Optimized` 固件预设的主机优化回归可单独运行，保留默认测试目录：
+
+```powershell
+cmake -S tests/audio_player -B build/audio-o3-tests -G Ninja -DCMAKE_C_COMPILER=F:/DevTools/mingw64/bin/gcc.exe -DAUDIO_TEST_OPTIMIZATION=-O3
+python tests/audio_player/make_wav.py build/audio-o3-tests/wav-fixtures
+python tests/audio_player/make_mp3.py build/audio-o3-tests/mp3-fixtures
+python tests/audio_player/make_flac.py build/audio-o3-tests/flac-fixtures
+cmake --build build/audio-o3-tests -j 8
+ctest --test-dir build/audio-o3-tests --output-on-failure
+cmake -S tests/audio_io -B build/io-o3-tests -G Ninja -DCMAKE_C_COMPILER=F:/DevTools/mingw64/bin/gcc.exe -DCMAKE_C_FLAGS=-O3
+cmake --build build/io-o3-tests -j 8
+ctest --test-dir build/io-o3-tests --output-on-failure
+```
+
+以上 28+6 项已在主机 `-O3` 下通过，包含独立 PCM 参考比对和 32 位 USB 输出。
+主机测试将所测音频库整体设为 `-O3`；固件仅五个热点文件使用 `-O3`，
+实际覆盖范围应以 `build/Optimized/compile_commands.json` 为准。

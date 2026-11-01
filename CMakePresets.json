@@ -23,6 +23,15 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "Optimized",
+            "displayName": "Audio O3 / Size Os",
+            "inherits": "Release",
+            "cacheVariables": {
+                "PLAYER_AUDIO_O3": true,
+                "CMAKE_ASM_FLAGS_RELEASE": "-Os -g0"
+            }
         }
     ],
     "buildPresets": [
@@ -33,6 +42,10 @@
         {
             "name": "Release",
             "configurePreset": "Release"
+        },
+        {
+            "name": "Optimized",
+            "configurePreset": "Optimized"
         }
     ]
 }

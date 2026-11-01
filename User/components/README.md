@@ -28,8 +28,25 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
     cmake --build --preset Debug -j 8
     cmake --preset Release
     cmake --build --preset Release -j 8
+    cmake --preset Optimized
+    cmake --build --preset Optimized -j 8
 
-构建输出为 build/Debug 或 build/Release 中的 F429_Player_remake.elf。所有用户组件输出 .su 栈报告；Debug 已避免整块 music_window_t 清零引入约 17 KiB 的栈临时量。audio_task 自身栈帧 2408 B，music_task 1248 B；这不是完整调用链的最高栈占用。
+构建输出为 build/对应预设/F429_Player_remake.elf。所有用户组件输出 .su 栈报告；Debug 已避免整块 music_window_t 清零引入约 17 KiB 的栈临时量。audio_task 自身栈帧 2408 B，music_task 1248 B；这不是完整调用链的最高栈占用。
+
+`Optimized` 继承 Release，通过 `PLAYER_AUDIO_O3=ON` 只将以下计算热点设为 `-O3`，
+其余代码和汇编使用 `-Os`。Debug、Release 保留原来的优化配置。
+
+| `-O3` 源文件 | 用途 |
+| --- | --- |
+| decoder/flac_decoder.c | FLAC 帧解码 |
+| decoder/mp3_decoder.c | MP3 帧解码 |
+| decoder/file_decoder.c | WAV/PCM 读取、格式转换 |
+| audio/audio_player.c | 文件 PCM 转换、DMA 补数 |
+| audio/usb_audio.c | USB 32 位 PCM、漂移插值、DMA 补数 |
+
+保留解码器的 `-fno-strict-aliasing` 和所有组件的栈报告，不启用 `-ffast-math` 或 LTO。
+已核对 compile_commands.json：新预设 5 个编译单元为 `-O3`，其余 207 个为 `-Os`。
+主机 `-O3` 的 28 项音频和 6 项 USB/耳机测试通过；实际 MCU 性能仍需上板测量。
 
 当前链接结果：
 
@@ -37,6 +54,7 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 | --- | ---: | ---: | ---: |
 | Debug | 187,496 B | 24+40 KiB | 597,088 B |
 | Release | 187,488 B | 24+40 KiB | 537,816 B |
+| Optimized | 187,488 B | 24+40 KiB | 550,064 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
