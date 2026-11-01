@@ -6,6 +6,7 @@
 #include "es9018.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "log.h"
 #include <string.h>
 
 #define FIFO_FRAMES 2048U
@@ -20,6 +21,9 @@ static pcm_frame_t s_fifo[FIFO_FRAMES];
 static uint16_t s_dma[2][HALF_FRAMES * 4U];
 static volatile uint32_t s_write, s_read, s_last_host, s_last_packet;
 static volatile uint32_t s_stream_serial;
+static volatile uint32_t s_packets, s_packet_bytes, s_bad_packets;
+static uint32_t s_report_tick;
+static const char *s_last_fault = "none";
 static volatile bool s_host_seen, s_stream, s_muted;
 static bool s_running, s_locked, s_primed;
 static TaskHandle_t s_task;
@@ -56,7 +60,13 @@ bool usb_audio_connected(void)
 
 void usb_audio_receive(const uint8_t *data, uint32_t bytes)
 {
-    if(!s_stream || !bytes || bytes > USB_AUDIO_MAX_PACKET_BYTES || bytes % USB_AUDIO_FRAME_BYTES) return;
+    ++s_packets;
+    s_packet_bytes = bytes;
+    if(!s_stream || !bytes) return;
+    if(bytes > USB_AUDIO_MAX_PACKET_BYTES || bytes % USB_AUDIO_FRAME_BYTES) {
+        ++s_bad_packets;
+        return;
+    }
     uint32_t frames = bytes / USB_AUDIO_FRAME_BYTES;
     uint32_t write = s_write;
     if(frames > FIFO_FRAMES - (write - s_read)) return;
@@ -85,7 +95,10 @@ void usb_audio_stop(void)
 bool usb_audio_start(void)
 {
     if(s_running) return true;
-    if(audio_i2s_configure(&hi2s2, USB_AUDIO_SAMPLE_RATE, USB_AUDIO_BITS) != HAL_OK) return false;
+    if(audio_i2s_configure(&hi2s2, USB_AUDIO_SAMPLE_RATE, USB_AUDIO_BITS) != HAL_OK) {
+        s_last_fault = "i2s-config";
+        return false;
+    }
     ES9018_set_format(ES9018_FORMAT_I2S, ES9018_WORD_LENGTH_32);
     memset(s_dma, 0, sizeof(s_dma));
     uint32_t events;
@@ -98,6 +111,7 @@ bool usb_audio_start(void)
     s_lock_start = HAL_GetTick();
     audio_dma_set_handler(dma_event);
     if(HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t *)s_dma, HALF_FRAMES * 4U) != HAL_OK) {
+        s_last_fault = "dma-start";
         audio_dma_set_handler(NULL);
         return false;
     }
@@ -107,20 +121,38 @@ bool usb_audio_start(void)
 
 void usb_audio_poll(uint32_t timeout_ticks)
 {
+    /* 只在音频任务中低频输出；USB 中断只更新计数，不打印日志。 */
+    uint32_t now = HAL_GetTick();
+    if(now - s_report_tick >= 2000U) {
+        s_report_tick = now;
+        taskENTER_CRITICAL();
+        uint32_t queued = s_write - s_read, packets = s_packets;
+        uint32_t bytes = s_packet_bytes, bad = s_bad_packets;
+        taskEXIT_CRITICAL();
+        LOGI("USB", "alt=%u rx=%lu size=%lu bad=%lu fifo=%lu dma=%lu lock=%u mute=%u last=%s",
+             (unsigned)s_stream, (unsigned long)packets, (unsigned long)bytes,
+             (unsigned long)bad, (unsigned long)queued, (unsigned long)s_edges,
+             (unsigned)s_locked, (unsigned)s_muted, s_last_fault);
+    }
     uint32_t events = 0;
     if(xTaskNotifyWait(0, UINT32_MAX, &events, timeout_ticks) != pdTRUE) {
-        if(timeout_ticks) usb_audio_stop();
+        if(timeout_ticks && s_running) {
+            s_last_fault = "dma-timeout";
+            usb_audio_stop();
+        }
         return;
     }
     events &= ~AUDIO_CONTROL_EVENT;
     if(!events || !s_running) return;
     if(events != (1U << s_half) || s_edges != s_expected) {
+        s_last_fault = "dma-event";
         usb_audio_stop();
         return;
     }
     memset(s_dma[s_half], 0, sizeof(s_dma[s_half]));
     if(!s_locked) s_locked = ES9018_is_locked();
     if(!s_locked && (uint32_t)(HAL_GetTick() - s_lock_start) >= 1000U) {
+        s_last_fault = "dac-lock";
         usb_audio_stop();
         return;
     }
@@ -160,6 +192,7 @@ void usb_audio_poll(uint32_t timeout_ticks)
         }
     }
     if(s_edges != s_expected) {
+        s_last_fault = "refill-late";
         usb_audio_stop();
         return;
     }

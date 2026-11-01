@@ -16,12 +16,31 @@ USB 收到主机复位或 SOF 后独占 I2S2，先停止并关闭 SD 文件。�
 
 软件 FIFO 2048 帧（16384 B），DMA 两个 384 帧半缓冲（合计 6144 B），均在普通 SRAM。半缓冲仍为 4 ms；DAC 锁定且积累至少 768 帧后输出。积压超过 1152 帧时用 64 位中间量把 385 帧插值成 384 帧补偿漂移，不截断为 16 位，但插值路径不保证逐样本无损。转换及插值在临界区外，FIFO 槽位到转换完成后才释放；USB alt 切换用流编号丢弃旧流结果，避免重置 FIFO 后提交错误读位置。主机静音同时门控 PCM 和耳放。
 
-`usb_audio.c` 单独启用 -O2，额外静态 SRAM 约 12.5 KiB，RTOS 动态堆不变。Release 普通 SRAM 剩余 9120 B。主机验证覆盖描述符、完整 32 位半字顺序、满幅正负插值、短包/长包/非对齐输入、溢出和欠载、流重启竞态，以及 400 秒模拟漂移。真实主机枚举、USB 丢包、DAC 输出及 4 ms 补数余量仍需上板验证。
+`usb_audio.c` 单独启用 -O2，额外静态 SRAM 约 12.5 KiB，RTOS 动态堆不变。Release 普通 SRAM 剩余 9096 B。主机验证覆盖描述符、完整 32 位半字顺序、满幅正负插值、短包/长包/非对齐输入、溢出和欠载、流重启竞态，以及 400 秒模拟漂移。真实主机枚举、USB 丢包、DAC 输出及 4 ms 补数余量仍需上板验证。
 
 以上 `-O2` 指 Debug/Release。`Optimized` 预设改为 FLAC、MP3、文件 PCM 读取转换、
 文件补数及 USB 补数使用 `-O3`，其余代码使用 `-Os`；编译参数及体积见上级 README。
 
 刷入后重新插拔 USB，在电脑播放设备中选择双声道 32 位/96000 Hz；当前只声明此固定格式，不提供 48k/16b 备用 alternate setting。
+
+音频控制拓扑与流接口均声明双声道：Input Terminal 的声道位置为左前/右前，
+Feature Unit 包含 Master/左/右三个控制项（仅 Master 支持静音）。此前端子仍为
+单声道，与双声道流接口不一致；现同步修正 AC 总长为 40 B、配置总长为 110 B，
+设备版本升至 2.01。主机回归会校验端子、Feature Unit 和所有长度，修复前该检查失败。
+此修复消除了已知描述符错误，真实 Windows 枚举及声音恢复仍需刷入确认。
+
+连接 USB 后音频任务每 2 秒输出一条 `USB` 状态，中断不打印：
+
+```text
+alt=1 rx=12345 size=768 bad=0 fifo=800 dma=3000 lock=1 mute=0 last=none
+```
+
+`alt` 表示电脑是否已开启流接口；`rx` 为累计收到的包数，正常播放时应持续增长；
+`size` 为最近一包字节数，通常为 768；`bad` 为长度错误包累计数；`fifo` 为待播帧数；
+`dma` 为当前 DMA 会话边沿计数；`lock` 为已获取 DAC 锁定，`mute` 为主机静音。
+`last` 保留最近一次停止/启动失败原因，`none` 表示尚无错误。
+若 `alt=0` 且 `rx` 不增长，优先排查电脑枚举/开启音频流；若 `alt=1` 且收包正常，
+再根据 `lock`、`mute`、`last` 区分 DAC、主机静音及 DMA 补数问题。
 
 规范参考：[USB Audio Data Formats 1.0](https://www.usb.org/sites/default/files/frmts10.pdf)、[Full Speed 等时带宽](https://source.android.com/docs/core/audio/usb)、[STM32F429 数据手册](https://www.st.com/resource/en/datasheet/stm32f429ie.pdf)。
 

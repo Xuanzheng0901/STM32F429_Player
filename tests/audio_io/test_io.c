@@ -14,6 +14,9 @@ static void packet(uint32_t *next);
 static bool clock_ok = true, dma_ok = true, locked = true;
 static GPIO_PinState ear = GPIO_PIN_SET, amp;
 
+void test_log(const char *tag, const char *format, ...)
+{ assert(!critical); (void)tag; (void)format; }
+
 uint32_t HAL_GetTick(void) { return now; }
 TickType_t xTaskGetTickCount(void) { return now; }
 TaskHandle_t xTaskGetCurrentTaskHandle(void) { return (void *)1; }

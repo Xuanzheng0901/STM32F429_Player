@@ -34,6 +34,9 @@ UI 测试按新布局检查左侧高亮边缘、浏览时右侧播放器像素�
 `build/ui-tests/music_ui.exe build/ui-tests/font-expanded.pbm expanded`
 可导出新增字形的 UI 预览。
 
+USB 类测试同时验证双声道 Input Terminal、Master/左/右 Feature Unit 控制项以及
+AC/配置描述符总长度，避免只改流格式而遗漏控制拓扑；此检查已复现并覆盖原单声道残留。
+
 当前共 54 项。音频夹具沿用 F407 工程生成的 FAT32 镜像及独立 FFmpeg PCM 参考；生成程序已迁入本工程，测试全部链接当前 F429 的应用及 FatFs 代码。主机 HAL/RTOS 为模拟接口，不是板上音频、真实热插拔时序、电气或吞吐证据。
 
 堆预算测试使用生产 heap_4 分配器，运行命令和边界见 [heap_budget](heap_budget/README.md)。
