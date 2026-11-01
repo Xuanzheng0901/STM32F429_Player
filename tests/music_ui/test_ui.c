@@ -164,9 +164,16 @@ static void check_bounds(lv_obj_t *parent)
 }
 
 /* 导出实际 UI.c 绘制的 I1 帧，用于电脑端检查布局。 */
-static void save_preview(const char *path)
+static void save_preview(const char *path, bool expanded_font)
 {
     const char *titles[] = {"晴天", "七里香", "夜曲", "稻香", "花海"};
+    if(expanded_font) {
+        titles[0] = "囍喆堃祎";
+        titles[1] = "玥珺璟翊";
+        titles[2] = "燚垚昶旻";
+        titles[3] = "晟霈骐骁";
+        titles[4] = "靐齉骅";
+    }
     const music_type_t types[] = {MUSIC_FLAC, MUSIC_WAV, MUSIC_FLAC, MUSIC_MP3, MUSIC_FLAC};
     window = (music_window_t){.total = 5, .count = 5};
     for(unsigned i = 0; i < 5; ++i) {
@@ -174,8 +181,8 @@ static void save_preview(const char *path)
         window.items[i].type = types[i];
     }
     music_info_t *info = &window.items[2];
-    strcpy(info->artist, "周杰伦");
-    strcpy(info->album, "十一月的萧邦");
+    strcpy(info->artist, expanded_font ? "祎喆玥珺" : "周杰伦");
+    strcpy(info->album, expanded_font ? "全角：ＡＢＣ１２３" : "十一月的萧邦");
     info->sample_rate_hz = 44100;
     info->bits_per_sample = 16;
     info->duration_seconds = 226;
@@ -195,8 +202,8 @@ static void save_preview(const char *path)
 int main(int argc, char **argv)
 {
     UI_init();
-    if(argc == 2) {
-        save_preview(argv[1]);
+    if(argc == 2 || argc == 3) {
+        save_preview(argv[1], argc == 3);
         return 0;
     }
     check_bounds(lv_screen_active());
@@ -397,6 +404,17 @@ int main(int argc, char **argv)
         lv_font_glyph_dsc_t glyph;
         assert(lv_font_get_glyph_dsc(&fusion_pixel_12_cjk, &glyph, notice_glyphs[i], 0));
         assert(!glyph.is_placeholder);
+    }
+    /* 新增的人名用字、繁体、扩展 A、四字节 UTF-8 汉字及全角字符。 */
+    const uint32_t expanded_glyphs[] = {
+        0x56cd, 0x5586, 0x5803, 0x794e, 0x73a5, 0x73fa, 0x749f, 0x7fca,
+        0x71da, 0x579a, 0x6636, 0x65fb, 0x665f, 0x9708, 0x9a90, 0x9a81,
+        0x9750, 0x9f49, 0x9ad4, 0x3400, 0x20086, 0xff21, 0xff11,
+    };
+    for(unsigned i = 0; i < sizeof(expanded_glyphs) / sizeof(expanded_glyphs[0]); ++i) {
+        lv_font_glyph_dsc_t glyph;
+        assert(lv_font_get_glyph_dsc(&fusion_pixel_12_cjk, &glyph, expanded_glyphs[i], 0));
+        assert(!glyph.is_placeholder && glyph.box_w && glyph.box_h);
     }
     UI_show_notice(PLAYER_CARD_INSERTED);
     UI_show_notice(PLAYER_USB_CONNECTED);

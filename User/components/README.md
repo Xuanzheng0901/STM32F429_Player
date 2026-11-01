@@ -52,11 +52,15 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 187,496 B | 24+40 KiB | 597,088 B |
-| Release | 187,488 B | 24+40 KiB | 537,816 B |
-| Optimized | 187,488 B | 24+40 KiB | 550,064 B |
+| Debug | 187,496 B | 24+40 KiB | 918,084 B |
+| Release | 187,488 B | 24+40 KiB | 858,660 B |
+| Optimized | 187,488 B | 24+40 KiB | 870,908 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
+
+UI 的 Fusion Pixel 12px 字库由 5534 个字符扩充到 18570 个，基本区汉字由
+5200 个扩充到 17637 个，额外占用约 313 KiB Flash，静态 RAM 配额不变。
+生成命令、范围和源字体的覆盖限制见 [字体说明](display/README.md)。
 
 普通 SRAM 中 s_audio 为 48 KiB、s_memory 为 39 KiB、s_bounce 为 4 KiB，均已通过 ELF 符号地址确认处于 0x20000000～0x20030000；LVGL 24 KiB 对象池位于 CCMRAM 的 0x10000000，FreeRTOS 40 KiB 堆位于 0x10006000，均为 NOLOAD。music 任务的 16 KiB 栈及 TCB 静态放在普通 SRAM，保留原栈容量，当时净释放普通 SRAM 8096 B。
 

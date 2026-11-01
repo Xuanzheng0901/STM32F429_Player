@@ -29,6 +29,11 @@ Windows 使用 MinGW GCC。先把编译器 bin 目录加入当前进程 PATH；�
 
 UI 测试按新布局检查左侧高亮边缘、浏览时右侧播放器像素不变及控件边界。64 位主机使用 32 KiB LVGL 堆，固件保持 24 KiB。需要检查实际绘制结果时，运行 `build/ui-tests/music_ui.exe build/ui-tests/layout.pbm`，可导出 360×184 的黑白预览。
 
+字体扩充后，UI 测试还检查新增人名用字、繁体、扩展 A、增补平面汉字和全角字符，
+确保由真实 LVGL 字库解析且不是占位框。运行
+`build/ui-tests/music_ui.exe build/ui-tests/font-expanded.pbm expanded`
+可导出新增字形的 UI 预览。
+
 当前共 54 项。音频夹具沿用 F407 工程生成的 FAT32 镜像及独立 FFmpeg PCM 参考；生成程序已迁入本工程，测试全部链接当前 F429 的应用及 FatFs 代码。主机 HAL/RTOS 为模拟接口，不是板上音频、真实热插拔时序、电气或吞吐证据。
 
 堆预算测试使用生产 heap_4 分配器，运行命令和边界见 [heap_budget](heap_budget/README.md)。

@@ -51,6 +51,32 @@ LVGL 启用 FreeRTOS 时还创建 `swdraw` 软件绘制线程，即使只有一�
 
 默认字体为 `fusion_pixel_12_cjk`。使用 24 像素字体时，在应用源文件中声明 `LV_FONT_DECLARE(fusion_pixel_24);`，再通过 `lv_obj_set_style_text_font()` 设置。
 
+当前 UI 的 12px 字库使用 `lv_font_conv 1.5.3` 扩充，沿用原文件头中的 Fusion Pixel
+2025.03.14 简体等宽 TTF。保留 1bpp、不压缩、不使用 kerning，行高 11、基线 2 不变。
+原有 5534 个字符的位图和字形尺寸保持一致；24px 字库不参与当前 UI，此次未扩充。
+
+| 范围 | 字符数 |
+| --- | ---: |
+| 基本区汉字 U+4E00～U+9FFF | 17637（原 5200） |
+| 汉字扩展 A | 56 |
+| 增补平面汉字 | 25 |
+| ASCII、部首、标点/假名、全角字符 | 852 |
+| 合计 | 18570（原 5534） |
+
+使用原 TTF 实际提供的字形，所选范围内缺少的字不会凭空补齐；例如当前覆盖 GB2312
+汉字 6446/6763 个，并非完整 GB2312 或全部 Unicode 汉字。字模、描述符和字符映射
+均为 Flash 中的只读常量，无需扩大 LVGL/RTOS 内存池或启用大字库/压缩配置。
+
+在仓库根目录使用以下命令重新生成，字体 C 文件头也保留了生成参数：
+
+```powershell
+lv_font_conv --font 'F:\素材\字体\fusion-pixel-font-12px-monospaced-ttf-v2025.03.14\fusion-pixel-12px-monospaced-zh_hans.ttf' --size 12 --bpp 1 --no-compress --no-kerning --range '0x20-0x7E,0x2E80-0x30FF,0x3400-0x4DBF,0x4E00-0x9FFF,0xFF00-0xFFEF,0x20000-0x323AF' --format lvgl --lv-font-name fusion_pixel_12_cjk -o User/components/display/lvgl_port/fusion_pixel_12_cjk.c
+```
+
+源 TTF 的 OFL 及内含字体许可保存在 `lvgl_port/font_licenses/fusion-pixel/`。
+工具和字体来源：[LVGL 字体转换器](https://github.com/lvgl/lv_font_conv)、
+[Fusion Pixel](https://github.com/TakWolf/fusion-pixel-font)。
+
 ## 初始化与调用
 
 GPIO、DMA、SPI1、USART1 和 TIM3 由工程初始化。当前 `StartDefaultTask()` 初始化 USB 后进入延时循环，display/log 由应用任务调用。初始化顺序为日志服务、显示模块、界面及输入设备：
