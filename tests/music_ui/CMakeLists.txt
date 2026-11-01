@@ -23,7 +23,7 @@ set_property(TARGET lvgl PROPERTY SOURCES "${SOURCES}")
 add_executable(music_ui test_ui.c "${REPO}/User/components/UI/music_player_assets.c"
     "${PORT}/fusion_pixel_12_cjk.c")
 target_include_directories(music_ui PRIVATE mocks "${REPO}/User/components/player"
-    "${REPO}/User/components/UI" "${REPO}/User/components/fatfs"
+    "${REPO}/User/components/UI" "${REPO}/User/components/fatfs" "${REPO}/User/components/audio"
     "${REPO}/User/components/display" "${REPO}/User/components/display/stm_ssd1685" "${PORT}")
 target_compile_definitions(music_ui PRIVATE portMAX_DELAY=0xffffffffU)
 target_compile_options(music_ui PRIVATE -Wall -Wextra -Werror -UNDEBUG)

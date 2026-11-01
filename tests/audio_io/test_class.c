@@ -19,14 +19,14 @@ void usb_audio_receive(const uint8_t *data, uint32_t bytes)
     ++packets;
 }
 USBD_StatusTypeDef USBD_LL_OpenEP(USBD_HandleTypeDef *dev, uint8_t ep, uint8_t type, uint16_t size)
-{ (void)dev; assert(ep == AUDIO_OUT_EP && type == USBD_EP_TYPE_ISOC && size == 192); return USBD_OK; }
+{ (void)dev; assert(ep == AUDIO_OUT_EP && type == USBD_EP_TYPE_ISOC && size == 776); return USBD_OK; }
 USBD_StatusTypeDef USBD_LL_CloseEP(USBD_HandleTypeDef *dev, uint8_t ep)
 { (void)dev; (void)ep; return USBD_OK; }
 USBD_StatusTypeDef USBD_LL_FlushEP(USBD_HandleTypeDef *dev, uint8_t ep)
 { (void)dev; (void)ep; return USBD_OK; }
 USBD_StatusTypeDef USBD_LL_PrepareReceive(USBD_HandleTypeDef *dev, uint8_t ep, uint8_t *data, uint32_t size)
 {
-    (void)dev; assert(ep == AUDIO_OUT_EP && size == 192);
+    (void)dev; assert(ep == AUDIO_OUT_EP && size == 776);
     if(receive_buffer) assert(data == receive_buffer);
     receive_buffer = data; return USBD_OK;
 }
@@ -49,6 +49,28 @@ static void interface(uint16_t index, uint16_t alt, bool accepted)
 }
 int main(void)
 {
+    /* 检查主机实际读取的描述符，避免只改后端而仍向电脑声明旧格式。 */
+    uint16_t length;
+    const uint8_t *desc = USBD_AUDIO.GetFSConfigDescriptor(&length);
+    bool format = false, endpoint = false, zero_alt = false;
+    for(unsigned offset = 0; offset < length; offset += desc[offset]) {
+        const uint8_t *d = desc + offset;
+        assert(d[0] >= 2 && offset + d[0] <= length);
+        if(d[1] == USB_DESC_TYPE_INTERFACE && d[2] == 1 && d[3] == 0) {
+            assert(d[4] == 0); zero_alt = true;
+        }
+        if(d[1] == AUDIO_INTERFACE_DESCRIPTOR_TYPE && d[2] == AUDIO_STREAMING_FORMAT_TYPE && d[0] == 11) {
+            assert(d[3] == AUDIO_FORMAT_TYPE_I && d[4] == 2 && d[5] == 4 && d[6] == 32 && d[7] == 1);
+            assert((d[8] | ((uint32_t)d[9] << 8) | ((uint32_t)d[10] << 16)) == 96000);
+            format = true;
+        }
+        if(d[1] == USB_DESC_TYPE_ENDPOINT) {
+            assert(d[2] == AUDIO_OUT_EP && d[3] == 0x09 && d[6] == 1);
+            assert((d[4] | ((unsigned)d[5] << 8)) == 776);
+            endpoint = true;
+        }
+    }
+    assert(format && endpoint && zero_alt);
     hUsbDeviceFS.dev_state = USBD_STATE_CONFIGURED;
     hUsbDeviceFS.dev_speed = USBD_SPEED_FULL;
     assert(sizeof(USBD_AUDIO_HandleTypeDef) < 1024);
@@ -64,7 +86,7 @@ int main(void)
     request.wIndex = 1;
     assert(USBD_AUDIO.Setup(&hUsbDeviceFS, &request) == USBD_OK && *control_buffer == 1);
     for(unsigned i = 0; i < 1000; ++i) {
-        received_size = i % 3 == 0 ? 188 : 192;
+        received_size = 760 + (i % 3) * 8;
         assert(USBD_AUDIO.DataOut(&hUsbDeviceFS, AUDIO_OUT_EP) == USBD_OK);
     }
     assert(packets == 1000 && stream);

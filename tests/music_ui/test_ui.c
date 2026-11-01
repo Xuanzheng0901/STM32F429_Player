@@ -408,7 +408,7 @@ int main(int argc, char **argv)
     assert(lv_obj_has_flag(notice_box, LV_OBJ_FLAG_HIDDEN));
     UI_set_usb_status(true, false);
     assert(!strcmp(lv_label_get_text(title_label), "USB Audio"));
-    assert(!strcmp(lv_label_get_text(audio_label), "48k/16b"));
+    assert(!strcmp(lv_label_get_text(audio_label), "96k/32b"));
     unsigned old_toggles = toggles;
     lv_obj_send_event(track_rows[2], LV_EVENT_CLICKED, NULL);
     assert(toggles == old_toggles);

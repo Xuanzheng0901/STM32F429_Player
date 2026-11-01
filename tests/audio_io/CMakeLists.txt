@@ -7,7 +7,7 @@ add_executable(audio_io test_io.c "${REPO}/User/components/audio/audio_dma.c")
 target_include_directories(audio_io PRIVATE mocks ../audio_player/mocks "${PLAYER}" "${REPO}/User/components/audio"
     "${REPO}/User/components/fatfs")
 target_compile_options(audio_io PRIVATE -Wall -Wextra -Werror -UNDEBUG)
-foreach(MODE transport faults drift headphone)
+foreach(MODE transport faults drift restart headphone)
     add_test(NAME ${MODE} COMMAND audio_io ${MODE})
 endforeach()
 

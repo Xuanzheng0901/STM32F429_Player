@@ -42,7 +42,7 @@ extern "C" {
   */
 #ifndef USBD_AUDIO_FREQ
 /* AUDIO Class Config */
-#define USBD_AUDIO_FREQ                               48000U
+#define USBD_AUDIO_FREQ                               USB_AUDIO_SAMPLE_RATE
 #endif /* USBD_AUDIO_FREQ */
 
 #ifndef USBD_MAX_NUM_INTERFACES
@@ -105,14 +105,11 @@ extern "C" {
 #define AUDIO_IN_TC                                   0x02U
 
 
-#define AUDIO_OUT_PACKET                              (uint16_t)(((USBD_AUDIO_FREQ * 2U * 2U) / 1000U))
+#define AUDIO_OUT_PACKET                              ((uint16_t)USB_AUDIO_MAX_PACKET_BYTES)
 #define AUDIO_DEFAULT_VOLUME                          70U
 
-/* Number of sub-packets in the audio transfer buffer. You can modify this value but always make sure
-  that it is an even number and higher than 3 */
-#define AUDIO_OUT_PACKET_NUM                          4U
-/* Total size of the audio transfer buffer */
-#define AUDIO_TOTAL_BUF_SIZE                          ((uint16_t)(AUDIO_OUT_PACKET * AUDIO_OUT_PACKET_NUM))
+/* 应用接管 PCM FIFO；类驱动仅暂存一个最大 USB 包，不再维护多包环形缓冲。 */
+#define AUDIO_TOTAL_BUF_SIZE                          AUDIO_OUT_PACKET
 
 /* Audio Commands enumeration */
 typedef enum

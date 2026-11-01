@@ -14,7 +14,7 @@ file(GLOB COMPONENT_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_LIST_DIR}/UI/*.c
 )
 
-# 只给实时解码器和文件音频输出单独优化。
+# 只给实时解码器和 PCM 输出单独优化。
 set_source_files_properties(${COMPONENT_SOURCES}
     TARGET_DIRECTORY ${CMAKE_PROJECT_NAME}
     PROPERTIES COMPILE_OPTIONS "-fstack-usage")
@@ -26,6 +26,7 @@ set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/decoder/flac_decoder.c
     PROPERTIES COMPILE_OPTIONS "-O2;-fstack-usage;-fno-strict-aliasing")
 
 set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/audio/audio_player.c
+    ${CMAKE_CURRENT_LIST_DIR}/audio/usb_audio.c
     TARGET_DIRECTORY ${CMAKE_PROJECT_NAME}
     PROPERTIES COMPILE_OPTIONS "-O2;-fstack-usage")
 

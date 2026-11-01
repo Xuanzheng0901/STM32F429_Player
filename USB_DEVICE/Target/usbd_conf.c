@@ -366,9 +366,10 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   HAL_PCD_RegisterIsoOutIncpltCallback(&hpcd_USB_OTG_FS, PCD_ISOOUTIncompleteCallback);
   HAL_PCD_RegisterIsoInIncpltCallback(&hpcd_USB_OTG_FS, PCD_ISOINIncompleteCallback);
 #endif /* USE_HAL_PCD_REGISTER_CALLBACKS */
-  HAL_PCDEx_SetRxFiFo(&hpcd_USB_OTG_FS, 0x80);
+  /* OTG FS 共 320 个 word：RX 256 + EP0 TX 64；EP1 仅 OUT，不分配 TX。
+   * RX 可容纳 776 字节音频包及控制/状态开销，原 128 word 放不下。 */
+  HAL_PCDEx_SetRxFiFo(&hpcd_USB_OTG_FS, 0x100);
   HAL_PCDEx_SetTxFiFo(&hpcd_USB_OTG_FS, 0, 0x40);
-  HAL_PCDEx_SetTxFiFo(&hpcd_USB_OTG_FS, 1, 0x80);
   }
   return USBD_OK;
 }

@@ -1,4 +1,5 @@
 #include "usb_audio.h"
+#include "usb_audio_format.h"
 #include "audio_dma.h"
 #include "audio_i2s.h"
 #include "i2s.h"
@@ -8,14 +9,17 @@
 #include <string.h>
 
 #define FIFO_FRAMES 2048U
-#define HALF_FRAMES 192U
+#define HALF_FRAMES (USB_AUDIO_FRAMES_PER_MS * 4U)
 #define PREFILL_FRAMES (HALF_FRAMES * 2U)
 #define HOST_TIMEOUT_MS 500U
 
-/* 一帧为左右两个 int16_t，全部位于 DMA 可访问的普通 SRAM。 */
-static uint32_t s_fifo[FIFO_FRAMES];
-static uint32_t s_dma[2][HALF_FRAMES];
+typedef struct { int32_t left, right; } pcm_frame_t;
+
+/* USB 小端 int32_t；I2S 按左右声道依次发送高半字、低半字。缓冲均在普通 SRAM。 */
+static pcm_frame_t s_fifo[FIFO_FRAMES];
+static uint16_t s_dma[2][HALF_FRAMES * 4U];
 static volatile uint32_t s_write, s_read, s_last_host, s_last_packet;
+static volatile uint32_t s_stream_serial;
 static volatile bool s_host_seen, s_stream, s_muted;
 static bool s_running, s_locked, s_primed;
 static TaskHandle_t s_task;
@@ -34,6 +38,7 @@ void usb_audio_set_stream(bool enabled)
     s_stream = false;
     s_write = s_read = 0;
     s_stream = enabled;
+    ++s_stream_serial;
 }
 
 void usb_audio_disconnect(void)
@@ -51,12 +56,12 @@ bool usb_audio_connected(void)
 
 void usb_audio_receive(const uint8_t *data, uint32_t bytes)
 {
-    if(!s_stream || !bytes || (bytes & 3U)) return;
-    uint32_t frames = bytes / 4U;
+    if(!s_stream || !bytes || bytes > USB_AUDIO_MAX_PACKET_BYTES || bytes % USB_AUDIO_FRAME_BYTES) return;
+    uint32_t frames = bytes / USB_AUDIO_FRAME_BYTES;
     uint32_t write = s_write;
     if(frames > FIFO_FRAMES - (write - s_read)) return;
     for(uint32_t i = 0; i < frames; ++i)
-        memcpy(&s_fifo[(write + i) & (FIFO_FRAMES - 1U)], data + i * 4U, 4U);
+        memcpy(&s_fifo[(write + i) & (FIFO_FRAMES - 1U)], data + i * USB_AUDIO_FRAME_BYTES, USB_AUDIO_FRAME_BYTES);
     s_write = write + frames;
     s_last_packet = HAL_GetTick();
 }
@@ -80,8 +85,8 @@ void usb_audio_stop(void)
 bool usb_audio_start(void)
 {
     if(s_running) return true;
-    if(audio_i2s_configure(&hi2s2, 48000U, 16U) != HAL_OK) return false;
-    ES9018_set_format(ES9018_FORMAT_I2S, ES9018_WORD_LENGTH_16);
+    if(audio_i2s_configure(&hi2s2, USB_AUDIO_SAMPLE_RATE, USB_AUDIO_BITS) != HAL_OK) return false;
+    ES9018_set_format(ES9018_FORMAT_I2S, ES9018_WORD_LENGTH_32);
     memset(s_dma, 0, sizeof(s_dma));
     uint32_t events;
     xTaskNotifyWait(0, UINT32_MAX, &events, 0);
@@ -119,28 +124,41 @@ void usb_audio_poll(uint32_t timeout_ticks)
         usb_audio_stop();
         return;
     }
-    /* 积压时把 193 帧平滑压成 192 帧，补偿时钟偏差，避免直接跳帧产生咔声。 */
+    /* 快照 FIFO 状态，转换和 64 位插值不关中断；完成后再释放已消费的槽位。 */
     taskENTER_CRITICAL();
-    uint32_t available = s_write - s_read;
-    if(!s_stream || !s_locked || available < HALF_FRAMES) s_primed = false;
-    if(s_stream && s_locked && available >= PREFILL_FRAMES) s_primed = true;
-    if(s_primed) {
-        bool adjust = available > HALF_FRAMES * 6U;
-        for(unsigned i = 0; i < HALF_FRAMES; ++i) {
-            uint32_t sample = s_fifo[(s_read + i) & (FIFO_FRAMES - 1U)];
-            if(adjust) {
-                uint32_t next = s_fifo[(s_read + i + 1U) & (FIFO_FRAMES - 1U)];
-                int32_t left = (int16_t)sample * (int32_t)(HALF_FRAMES - i) + (int16_t)next * (int32_t)i;
-                int32_t right = (int16_t)(sample >> 16) * (int32_t)(HALF_FRAMES - i) +
-                                (int16_t)(next >> 16) * (int32_t)i;
-                sample = (uint16_t)(left / (int32_t)HALF_FRAMES) |
-                         ((uint32_t)(uint16_t)(right / (int32_t)HALF_FRAMES) << 16);
-            }
-            s_dma[s_half][i] = s_muted ? 0 : sample;
-        }
-        s_read += HALF_FRAMES + adjust;
-    }
+    uint32_t read = s_read, serial = s_stream_serial;
+    uint32_t available = s_write - read;
+    bool stream = s_stream;
     taskEXIT_CRITICAL();
+    if(!stream || !s_locked || available < HALF_FRAMES) s_primed = false;
+    if(stream && s_locked && available >= PREFILL_FRAMES) s_primed = true;
+    if(s_primed) {
+        bool adjust = available > HALF_FRAMES * 3U;
+        for(unsigned i = 0; i < HALF_FRAMES; ++i) {
+            pcm_frame_t sample = s_fifo[(read + i) & (FIFO_FRAMES - 1U)];
+            if(adjust) {
+                pcm_frame_t next = s_fifo[(read + i + 1U) & (FIFO_FRAMES - 1U)];
+                sample.left = (int32_t)(((int64_t)sample.left * (HALF_FRAMES - i) +
+                                         (int64_t)next.left * i) / HALF_FRAMES);
+                sample.right = (int32_t)(((int64_t)sample.right * (HALF_FRAMES - i) +
+                                          (int64_t)next.right * i) / HALF_FRAMES);
+            }
+            uint16_t *output = &s_dma[s_half][i * 4U];
+            output[0] = s_muted ? 0 : (uint16_t)((uint32_t)sample.left >> 16);
+            output[1] = s_muted ? 0 : (uint16_t)sample.left;
+            output[2] = s_muted ? 0 : (uint16_t)((uint32_t)sample.right >> 16);
+            output[3] = s_muted ? 0 : (uint16_t)sample.right;
+        }
+        taskENTER_CRITICAL();
+        bool current = serial == s_stream_serial;
+        if(current) s_read = read + HALF_FRAMES + adjust;
+        taskEXIT_CRITICAL();
+        /* USB alt 切换可以在转换途中重置 FIFO，不能提交旧流的读位置或声音。 */
+        if(!current) {
+            s_primed = false;
+            memset(s_dma[s_half], 0, sizeof(s_dma[s_half]));
+        }
+    }
     if(s_edges != s_expected) {
         usb_audio_stop();
         return;

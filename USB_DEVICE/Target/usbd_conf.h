@@ -75,7 +75,8 @@
 /*---------- -----------*/
 #define USBD_SELF_POWERED     1U
 /*---------- -----------*/
-#define USBD_AUDIO_FREQ     48000U
+#include "../../User/components/audio/usb_audio_format.h"
+#define USBD_AUDIO_FREQ     USB_AUDIO_SAMPLE_RATE
 
 /****************************************/
 /* #define for FS and HS identification */

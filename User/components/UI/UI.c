@@ -8,6 +8,7 @@
 #include "tim.h"
 
 #include "music_player_assets.h"
+#include "usb_audio_format.h"
 #include <string.h>
 
 #define PLAYER_TRACK_COUNT 5U
@@ -119,8 +120,8 @@ static void ui_update(void)
                          current_info.type == MUSIC_MP3 ? "MP3" :
                          current_info.type == MUSIC_FLAC ? "FLAC" : "--";
     lv_label_set_text_static(format_label, usb_mode ? "USB" : format);
-    const uint32_t rate = usb_mode ? 48000U : current_info.sample_rate_hz;
-    const unsigned bits = usb_mode ? 16U : current_info.bits_per_sample;
+    const uint32_t rate = usb_mode ? USB_AUDIO_SAMPLE_RATE : current_info.sample_rate_hz;
+    const unsigned bits = usb_mode ? USB_AUDIO_BITS : current_info.bits_per_sample;
     if(rate == 0 || bits == 0)
         lv_label_set_text_static(audio_label, "--");
     else if(rate % 1000 / 100)

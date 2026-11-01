@@ -10,7 +10,17 @@ playback.h 提供选曲、暂停、循环、停止确认以及状态/事件读�
 
 文件起播先送零数据建立 BCLK/LRCLK，等待 DAC 锁定后消耗 PCM。DMA 超时、补数迟到或解码错误时停止输出并关闭文件。音频任务不调用 UI、不持有 LVGL 锁；前端通过状态队列和静态事件环读取结果。
 
-USB 收到主机复位或 SOF 后独占 I2S2，先停止并关闭 SD 文件。固定 UAC1、48 kHz/16 位双声道、adaptive OUT；ISR 只收包及更新状态，不操作 I2S/I2C。FIFO 2048 帧（8192 B），DMA 两个 192 帧半缓冲（1536 B），均在普通 SRAM。DAC 锁定且积累至少 384 帧后输出；积压时线性插值将 193 帧压成 192 帧补偿漂移，此路径不保证逐样本无损。主机静音同时门控 PCM 和耳放。
+USB 收到主机复位或 SOF 后独占 I2S2，先停止并关闭 SD 文件。固定 UAC1、96 kHz/32 位整数 PCM 双声道、adaptive OUT；ISR 只收包及更新状态，不操作 I2S/I2C。描述符、PCM 和 UI 共用 `usb_audio_format.h`，每帧为小端左右两个 int32_t，I2S 按左高半字/左低半字/右高半字/右低半字发送，不截成 16 位。
+
+每毫秒标准 USB 包为 96 帧/768 B，端点最大包为 97 帧/776 B，支持 95/96/97 帧变化。Full Speed 单个等时包上限 1023 B，96k/32b 双声道在此范围内，保留 UAC1。OTG FS 的 320 word 硬件 FIFO 改为 RX 256 + EP0 TX 64，不再给仅 OUT 的 EP1 分配 TX；原 RX 128 word 不能容纳新包。类驱动只用一个 776 B 缓冲暂存当前包，不复制四包环形缓冲。
+
+软件 FIFO 2048 帧（16384 B），DMA 两个 384 帧半缓冲（合计 6144 B），均在普通 SRAM。半缓冲仍为 4 ms；DAC 锁定且积累至少 768 帧后输出。积压超过 1152 帧时用 64 位中间量把 385 帧插值成 384 帧补偿漂移，不截断为 16 位，但插值路径不保证逐样本无损。转换及插值在临界区外，FIFO 槽位到转换完成后才释放；USB alt 切换用流编号丢弃旧流结果，避免重置 FIFO 后提交错误读位置。主机静音同时门控 PCM 和耳放。
+
+`usb_audio.c` 单独启用 -O2，额外静态 SRAM 约 12.5 KiB，RTOS 动态堆不变。Release 普通 SRAM 剩余 9120 B。主机验证覆盖描述符、完整 32 位半字顺序、满幅正负插值、短包/长包/非对齐输入、溢出和欠载、流重启竞态，以及 400 秒模拟漂移。真实主机枚举、USB 丢包、DAC 输出及 4 ms 补数余量仍需上板验证。
+
+刷入后重新插拔 USB，在电脑播放设备中选择双声道 32 位/96000 Hz；当前只声明此固定格式，不提供 48k/16b 备用 alternate setting。
+
+规范参考：[USB Audio Data Formats 1.0](https://www.usb.org/sites/default/files/frmts10.pdf)、[Full Speed 等时带宽](https://source.android.com/docs/core/audio/usb)、[STM32F429 数据手册](https://www.st.com/resource/en/datasheet/stm32f429ie.pdf)。
 
 连续 500 ms 无主机活动或收到断开回调后退出 USB。PA9 为串口 TX、未启用 VBUS 检测，因此主机挂起也按断开处理。USB 期间 SD 仍可挂载/卸载，SD 控制不能抢占输出。
 

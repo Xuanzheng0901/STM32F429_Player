@@ -12,7 +12,7 @@ void usb_audio_set_mute(bool muted);
 void usb_audio_receive(const uint8_t *data, uint32_t bytes);
 bool usb_audio_connected(void);
 
-/* 以下接口只由音频任务调用；固定 48 kHz、16 位、双声道。 */
+/* 以下接口只由音频任务调用；固定 96 kHz、32 位、双声道。 */
 bool usb_audio_start(void);
 void usb_audio_stop(void);
 void usb_audio_poll(uint32_t timeout_ticks);
