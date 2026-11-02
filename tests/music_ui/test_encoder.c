@@ -10,6 +10,8 @@ static struct test_timer timer;
 struct test_queue { uint8_t items[8]; unsigned read, write; };
 static struct test_queue queue;
 static unsigned controls[5], control_count, knob_created, registered;
+static unsigned volume_count;
+static int volume_direction;
 static knob_cb_t rotate_cb;
 static void *rotate_arg;
 static int32_t knob_count;
@@ -41,6 +43,7 @@ int iot_button_unregister_cb(button_handle_t b, button_event_t e, button_event_a
 { (void)b; (void)e; (void)args; return 0; }
 button_event_t iot_button_get_event(button_handle_t b) { (void)b; return button_event; }
 static void on_control(unsigned index) { assert(index < 5); controls[control_count++] = index; }
+static void on_volume(int direction) { ++volume_count; volume_direction = direction; }
 static void scan(unsigned times) { while(times--) timer.callback(&timer); }
 static lv_indev_data_t read_input(lv_indev_t *input)
 { lv_indev_data_t data = {0}; encoder_read(input, &data); return data; }
@@ -51,31 +54,28 @@ int main(void)
     lv_init(); lv_display_t *display = lv_display_create(360, 184);
     TIM_HandleTypeDef tim = {0}; knob_config_t knob = {.htim = &tim};
     lvgl_port_encoder_cfg_t config = {.disp = display, .encoder_a_b = &knob,
-        .encoder_enter = (button_handle_t)1, .control_click = on_control};
+        .encoder_enter = (button_handle_t)1, .control_click = on_control, .volume_step = on_volume};
     lv_indev_t *input = lvgl_port_add_encoder(&config); assert(input);
-#if LV_PORT_ENCODER_SIDE_KEYS
-    assert(!knob_created && !registered); /* 未焊接时不启动 TIM3，不读取 PB3。 */
-    test_gpiod.unused |= BUTTON_SIDE1_Pin; scan(1);
-    assert(read_input(input).enc_diff == 0);
-    test_gpiod.unused &= ~BUTTON_SIDE1_Pin; scan(3); /* 短抖动不产生移动。 */
-    key(&test_gpiod, BUTTON_SIDE1_Pin, true); scan(20);
-    assert(read_input(input).enc_diff == 1); assert(read_input(input).enc_diff == 0);
-    key(&test_gpiod, BUTTON_SIDE1_Pin, false);
-    key(&test_gpiod, BUTTON_SIDE3_Pin, true); assert(read_input(input).enc_diff == -1);
-    key(&test_gpiod, BUTTON_SIDE3_Pin, false);
-    key(&test_gpiod, BUTTON_SIDE2_Pin, true);
-    key(&test_gpiod, BUTTON_SIDE2_Pin, false); /* UI 没读取期间的确认短按仍保留。 */
-    lv_indev_data_t data = read_input(input); assert(data.state == LV_INDEV_STATE_PRESSED && data.continue_reading);
-    assert(read_input(input).state == LV_INDEV_STATE_RELEASED);
-#else
     assert(knob_created == 1 && registered == 2);
     knob_count = 2; rotate_cb((void *)1, rotate_arg); assert(read_input(input).enc_diff == 2);
     button_event = BUTTON_PRESS_DOWN; press_cb[button_event]((button_handle_t)1, press_arg);
-    assert(read_input(input).state == LV_INDEV_STATE_PRESSED);
     button_event = BUTTON_PRESS_UP; press_cb[button_event]((button_handle_t)1, press_arg);
+    /* 编码器确认短按在两次 LVGL 读取之间完成，也必须保留按下和释放。 */
+    lv_indev_data_t data = read_input(input);
+    assert(data.state == LV_INDEV_STATE_PRESSED && data.continue_reading);
     assert(read_input(input).state == LV_INDEV_STATE_RELEASED);
-    key(&test_gpiod, BUTTON_SIDE1_Pin, true); assert(read_input(input).enc_diff == 0);
-#endif
+    test_gpiod.unused |= BUTTON_SIDE1_Pin; scan(1);
+    test_gpiod.unused &= ~BUTTON_SIDE1_Pin; scan(3);
+    read_input(input); assert(!volume_count); /* 短抖动被忽略。 */
+    key(&test_gpiod, BUTTON_SIDE1_Pin, true); scan(20);
+    key(&test_gpiod, BUTTON_SIDE1_Pin, false);
+    assert(!volume_count); /* 扫描任务只入队，不调 UI 或音频回调。 */
+    assert(read_input(input).enc_diff == 0 && volume_count == 1 && volume_direction == -1);
+    read_input(input); assert(volume_count == 1); /* 长按不连发。 */
+    key(&test_gpiod, BUTTON_SIDE3_Pin, true); key(&test_gpiod, BUTTON_SIDE3_Pin, false);
+    assert(read_input(input).enc_diff == 0 && volume_count == 2 && volume_direction == 1);
+    key(&test_gpiod, BUTTON_SIDE2_Pin, true); key(&test_gpiod, BUTTON_SIDE2_Pin, false);
+    assert(read_input(input).state == LV_INDEV_STATE_RELEASED && volume_count == 2);
     key(&test_gpiod, BUTTON_UP1_Pin, true); key(&test_gpiod, BUTTON_UP1_Pin, false);
     key(&test_gpiod, BUTTON_UP2_Pin, true); key(&test_gpiod, BUTTON_UP2_Pin, false);
     key(&test_gpiod, BUTTON_UP3_Pin, true); key(&test_gpiod, BUTTON_UP3_Pin, false);
@@ -86,5 +86,5 @@ int main(void)
     assert(control_count == 5);
     for(unsigned i = 0; i < 5; ++i) assert(controls[i] == 4 - i);
     assert(lvgl_port_remove_encoder(input) == 0);
-    puts("PASS: key mapping, debounce, buffered short presses, LVGL dispatch and hardware fallback");
+    puts("PASS: hardware encoder, buffered confirmation, top controls and debounced side volume keys");
 }

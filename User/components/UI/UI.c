@@ -354,11 +354,6 @@ static void ui_control_click(unsigned index)
 static void ui_encoder_init(lv_group_t *group)
 {
     button_handle_t button = NULL;
-#if LV_PORT_ENCODER_SIDE_KEYS
-    const lvgl_port_encoder_cfg_t config = {
-        .disp = lv_display_get_default(), .control_click = ui_control_click,
-    };
-#else
     const button_config_t button_config = {0};
     const button_gpio_config_t gpio = {
         .port = KNOB_BUTTON_GPIO_Port, .pin = KNOB_BUTTON_Pin, .active_level = 0,
@@ -372,8 +367,8 @@ static void ui_encoder_init(lv_group_t *group)
     const lvgl_port_encoder_cfg_t config = {
         .disp = lv_display_get_default(), .encoder_a_b = &knob, .encoder_enter = button,
         .control_click = ui_control_click,
+        .volume_step = player_adjust_volume,
     };
-#endif
     lv_indev_t *indev = lvgl_port_add_encoder(&config);
     if(indev)
         lv_indev_set_group(indev, group);

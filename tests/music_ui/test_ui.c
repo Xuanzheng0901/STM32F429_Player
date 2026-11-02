@@ -26,6 +26,8 @@ static music_window_t window;
 static uint8_t frame[DISP_BUF_SIZE];
 static lv_indev_t *test_encoder;
 static void (*test_control_click)(unsigned);
+static void (*test_volume_step)(int);
+static int volume_steps;
 static int32_t encoder_delta;
 static bool encoder_pressed;
 /* 歌曲信息现在位于右侧；只比较底栏上方 x=136..359 的整字节区域。 */
@@ -60,7 +62,8 @@ static void read_encoder(lv_indev_t *encoder, lv_indev_data_t *data)
 lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *config)
 {
     test_control_click = config->control_click;
-    assert(test_control_click);
+    test_volume_step = config->volume_step;
+    assert(test_control_click && test_volume_step && config->encoder_a_b && config->encoder_enter);
     lv_indev_t *encoder = lv_indev_create();
     lv_indev_set_type(encoder, LV_INDEV_TYPE_ENCODER);
     lv_indev_set_display(encoder, config->disp);
@@ -71,6 +74,7 @@ lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *config)
 void player_request(uint32_t index, bool select)
 { assert(!locked); request_index = index; request_select = select; pending = true; }
 void player_toggle(void) { assert(!locked); ++toggles; }
+void player_adjust_volume(int direction) { assert(!locked); volume_steps += direction; }
 void player_set_mode(player_mode_t mode) { assert(!locked); requested_repeat = mode == PLAYER_REPEAT_ONE; requested_mode = mode; }
 
 static void publish(uint32_t index, uint32_t total, bool select)
@@ -425,6 +429,8 @@ int main(int argc, char **argv)
     lv_tick_inc(3000); lv_timer_handler();
     assert(lv_obj_has_flag(notice_box, LV_OBJ_FLAG_HIDDEN));
     UI_set_usb_status(true, false);
+    test_volume_step(1); assert(volume_steps == 1);
+    test_volume_step(-1); assert(volume_steps == 0);
     assert(!strcmp(lv_label_get_text(title_label), "USB Audio"));
     assert(!strcmp(lv_label_get_text(audio_label), "96k/32b"));
     unsigned old_toggles = toggles;
