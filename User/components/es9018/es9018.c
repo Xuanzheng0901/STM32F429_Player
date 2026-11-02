@@ -4,6 +4,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+static uint8_t s_volume;
+
 /* ES9018K2M 手册 v3.7：控制接口第 10 页，寄存器第 12～19 页。
  * 逐个访问寄存器，不依赖地址自动递增。
  */
@@ -49,9 +51,12 @@ bool ES9018_is_locked(void)
 
 void ES9018_set_volume(uint8_t volume)
 {
+    s_volume = volume;
     ES9018_write_reg(ES9018_REG_VOLUME_LEFT, volume);
     ES9018_write_reg(ES9018_REG_VOLUME_RIGHT, volume);
 }
+
+uint8_t ES9018_get_volume(void) { return s_volume; }
 
 void ES9018_set_mute(bool mute)
 {
@@ -104,4 +109,5 @@ void ES9018_init(void)
     };
     for(uint32_t i = 0; i < sizeof(settings) / sizeof(settings[0]); ++i)
         ES9018_write_reg(settings[i][0], settings[i][1]);
+    s_volume = 0;
 }

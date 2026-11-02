@@ -171,6 +171,7 @@ void player_toggle(void)
     uint32_t serial = playback_toggle();
     if(serial) s_selection = serial;
 }
+void player_adjust_volume(int direction) { playback_adjust_volume(direction); }
 void player_set_mode(player_mode_t mode)
 {
     s_mode = mode;

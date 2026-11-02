@@ -51,6 +51,8 @@ bool ES9018_is_locked(void);
 
 // 原始衰减值：-(volume / 2) dB
 void ES9018_set_volume(uint8_t volume);
+/* 最近一次设置的衰减值，供音频任务继承启动音量，不额外读取 I2C。 */
+uint8_t ES9018_get_volume(void);
 void ES9018_set_mute(bool mute);
 void ES9018_set_filter(ES9018_Filter filter);
 void ES9018_set_format(ES9018_SerialFormat format, ES9018_WordLength word_length);

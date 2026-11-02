@@ -4,7 +4,7 @@ enable_testing()
 get_filename_component(REPO "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 add_executable(player_control test_control.c "${REPO}/User/components/player/player.c" "${REPO}/User/components/audio/playback.c" "${REPO}/User/components/player/player_shuffle.c")
 target_include_directories(player_control PRIVATE mocks "${REPO}/User/components/player"
-    "${REPO}/User/components/audio" "${REPO}/User/components/sdcard" "${REPO}/User/components/fatfs")
+    "${REPO}/User/components/audio" "${REPO}/User/components/es9018" "${REPO}/User/components/sdcard" "${REPO}/User/components/fatfs")
 target_compile_options(player_control PRIVATE -Wall -Wextra -Werror -UNDEBUG)
 add_test(NAME control COMMAND player_control)
 add_test(NAME headless COMMAND player_control headless)

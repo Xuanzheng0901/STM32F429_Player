@@ -6,6 +6,7 @@
 #include "audio_output.h"
 #include "usb_audio.h"
 #include "log.h"
+#include "es9018.h"
 
 typedef struct {
     music_info_t info;
@@ -20,6 +21,19 @@ static QueueHandle_t s_stop_ack;
 static volatile bool s_usb_mode, s_usb_playing;
 static player_notice_t s_notices[8];
 static unsigned s_notice_read, s_notice_write;
+static uint8_t s_volume;
+static bool s_volume_pending;
+
+void playback_adjust_volume(int direction)
+{
+    if(!s_audio_task) return;
+    taskENTER_CRITICAL();
+    int volume = (int)s_volume - direction * 16;
+    s_volume = (uint8_t)(volume < 0 ? 0 : volume > 255 ? 255 : volume);
+    s_volume_pending = true;
+    taskEXIT_CRITICAL();
+    xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
+}
 
 /* 音频任务只投递事件，LVGL 锁和墨水屏刷新由曲库任务承担。 */
 static void post_notice(player_notice_t notice)
@@ -57,6 +71,16 @@ static void audio_task(void *argument)
     audio_state_t last_state = AUDIO_STOPPED;
     audio_output_init();
     while(1) {
+        /* 所有音量 I2C 写入都在音频任务完成，SD/USB 共用，并继承启动设置。 */
+        taskENTER_CRITICAL();
+        bool volume_pending = s_volume_pending;
+        uint8_t volume = s_volume;
+        s_volume_pending = false;
+        taskEXIT_CRITICAL();
+        if(volume_pending) {
+            ES9018_set_volume(volume);
+            LOGI("AUDIO", "volume: -%u.%u dB (reg=%u)", volume / 2U, (volume & 1U) * 5U, volume);
+        }
         bool connected = usb_audio_connected();
         if(connected != s_usb_mode) {
             audio_output_set_active(false);
@@ -139,6 +163,8 @@ output:
 
 bool playback_init(void)
 {
+    s_volume = ES9018_get_volume();
+    s_volume_pending = false;
     s_commands = xQueueCreate(1, sizeof(audio_command_t));
     s_status = xQueueCreate(1, sizeof(audio_status_t));
     s_stop_ack = xQueueCreate(1, sizeof(uint32_t));

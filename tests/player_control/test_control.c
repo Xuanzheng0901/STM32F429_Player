@@ -45,6 +45,15 @@ static void on_usb(bool connected, bool active) { (void)active; assert(connected
 struct test_task { void *fiber; TaskFunction_t function; };
 static struct test_task tasks[2];
 static unsigned task_count;
+static uint8_t volume = 90;
+static unsigned volume_writes;
+uint8_t ES9018_get_volume(void) { return volume; }
+void ES9018_set_volume(uint8_t value)
+{
+    assert(!critical && GetCurrentFiber() == tasks[0].fiber);
+    volume = value;
+    ++volume_writes;
+}
 
 void test_enter_critical(void) { ++critical; }
 void test_exit_critical(void) { assert(critical); --critical; }
@@ -155,8 +164,10 @@ static void process_all(void)
 int main(int argc, char **argv)
 {
     main_fiber = ConvertThreadToFiber(NULL); assert(main_fiber);
+    player_adjust_volume(1); assert(!volume_writes); /* UI 就绪但播放器尚未初始化。 */
     if(argc > 1 && !strcmp(argv[1], "headless")) {
         assert(player_init(NULL)); process_all();
+        player_adjust_volume(1); process_all(); assert(volume == 74);
         player_request(1, true); process_all(); assert(state == AUDIO_PLAYING && starts == 1);
         player_request(30, false); process_all(); assert(state == AUDIO_PLAYING && starts == 1);
         player_toggle(); process_all(); assert(state == AUDIO_PAUSED);
@@ -169,6 +180,15 @@ int main(int argc, char **argv)
     memset(&callbacks, 0, sizeof(callbacks)); /* 初始化复制接口，不保留调用方栈指针。 */
     process_all();
     assert(selected == 0 && !playing && starts == 0);
+    player_adjust_volume(1); player_adjust_volume(1);
+    assert(volume == 90 && !volume_writes); /* 调用方不写 I2C；继承启动音量。 */
+    process_all(); assert(volume == 58 && volume_writes == 1);
+    player_adjust_volume(-1); process_all(); assert(volume == 74);
+    for(unsigned i = 0; i < 20; ++i) player_adjust_volume(1);
+    player_adjust_volume(-1); process_all(); assert(volume == 16); /* 饱和后反向仍保留顺序。 */
+    for(unsigned i = 0; i < 20; ++i) player_adjust_volume(-1);
+    process_all(); assert(volume == 255);
+    player_adjust_volume(1); process_all(); assert(volume == 239);
     player_request(1, true); player_request(0, false); process_all();
     assert(selected == 1 && focused == 0 && playing && starts == 1);
     assert(selected_info.sample_rate_hz == 44100 && selected_info.duration_seconds == 90);
@@ -204,6 +224,9 @@ int main(int argc, char **argv)
     /* USB 接管后所有 SD 控制无效；断开后选曲保持暂停。 */
     host_connected = true; ear_event = 0; process_all();
     assert(usb_running && state == AUDIO_STOPPED && amp_active);
+    uint8_t usb_volume = volume;
+    player_adjust_volume(1); process_all();
+    assert(volume == usb_volume - 16 && usb_running && amp_active);
     unsigned saved_starts = starts;
     player_toggle(); player_request(2, true); player_set_repeat(true); process_all();
     assert(starts == saved_starts && usb_running);
@@ -211,6 +234,7 @@ int main(int argc, char **argv)
     ear_event = 1; process_all(); assert(notices_seen[PLAYER_EAR_INSERTED] == 1);
     card_removed = true; card_event = SDCARD_REMOVED; process_all();
     assert(usb_running && amp_active && notices_seen[PLAYER_CARD_REMOVED] == 1);
+    player_adjust_volume(-1); process_all(); assert(volume == usb_volume && usb_running);
     card_removed = false; card_event = SDCARD_INSERTED; process_all();
     assert(usb_running && amp_active && notices_seen[PLAYER_CARD_INSERTED] == 2);
     host_connected = false; process_all();
