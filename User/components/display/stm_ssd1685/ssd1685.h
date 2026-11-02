@@ -20,6 +20,8 @@ void ssd1685_deep_sleep(void);
 
 void ssd1685_set_refresh_mode(uint8_t mode);
 
+/* 下一次绘制强制全刷，随后继续使用原刷新模式。 */
+void ssd1685_request_full_refresh(void);
 void ssd1685_draw(const uint8_t *pixels, uint16_t stride);
 void ssd1685_draw_full(const uint8_t *pixels, uint16_t stride);
 

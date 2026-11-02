@@ -10,10 +10,11 @@ typedef struct {
 } audio_status_t;
 
 bool playback_init(void);
-/* 每档改变衰减寄存器 16（8 dB），direction 为 +1 增大、-1 减小。 */
+/* 每档寄存器变化 8（4 dB），范围 64～192；192 处再减静音，加音量取消静音。 */
 void playback_adjust_volume(int direction);
+void playback_toggle_mute(void);
 /* 消费最近一次音量设置事件；同值调节也通知，以刷新提示时长。 */
-bool playback_volume(uint8_t *attenuation);
+bool playback_volume(uint8_t *attenuation, bool *muted);
 void playback_deinit(void);
 uint32_t playback_select(uint32_t index, const music_info_t *info, bool autoplay);
 /* 超时返回 false，调用者必须保留旧卷，不能继续卸载/重新挂载。 */

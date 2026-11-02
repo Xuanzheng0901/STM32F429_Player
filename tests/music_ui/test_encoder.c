@@ -10,7 +10,7 @@ static struct test_timer timer;
 struct test_queue { uint8_t items[8]; unsigned read, write; };
 static struct test_queue queue;
 static unsigned controls[5], control_count, knob_created, registered;
-static unsigned volume_count;
+static unsigned volume_count, middle_clicks, middle_longs;
 static int volume_direction;
 static knob_cb_t rotate_cb;
 static void *rotate_arg;
@@ -44,6 +44,8 @@ int iot_button_unregister_cb(button_handle_t b, button_event_t e, button_event_a
 button_event_t iot_button_get_event(button_handle_t b) { (void)b; return button_event; }
 static void on_control(unsigned index) { assert(index < 5); controls[control_count++] = index; }
 static void on_volume(int direction) { ++volume_count; volume_direction = direction; }
+static void on_middle_click(void) { ++middle_clicks; }
+static void on_middle_long(void) { ++middle_longs; }
 static void scan(unsigned times) { while(times--) timer.callback(&timer); }
 static lv_indev_data_t read_input(lv_indev_t *input)
 { lv_indev_data_t data = {0}; encoder_read(input, &data); return data; }
@@ -54,7 +56,8 @@ int main(void)
     lv_init(); lv_display_t *display = lv_display_create(360, 184);
     TIM_HandleTypeDef tim = {0}; knob_config_t knob = {.htim = &tim};
     lvgl_port_encoder_cfg_t config = {.disp = display, .encoder_a_b = &knob,
-        .encoder_enter = (button_handle_t)1, .control_click = on_control, .volume_step = on_volume};
+        .encoder_enter = (button_handle_t)1, .control_click = on_control, .volume_step = on_volume,
+        .middle_click = on_middle_click, .middle_long_press = on_middle_long};
     lv_indev_t *input = lvgl_port_add_encoder(&config); assert(input);
     assert(knob_created == 1 && registered == 2);
     knob_count = 2; rotate_cb((void *)1, rotate_arg); assert(read_input(input).enc_diff == 2);
@@ -74,8 +77,21 @@ int main(void)
     read_input(input); assert(volume_count == 1); /* 长按不连发。 */
     key(&test_gpiod, BUTTON_SIDE3_Pin, true); key(&test_gpiod, BUTTON_SIDE3_Pin, false);
     assert(read_input(input).enc_diff == 0 && volume_count == 2 && volume_direction == 1);
-    key(&test_gpiod, BUTTON_SIDE2_Pin, true); key(&test_gpiod, BUTTON_SIDE2_Pin, false);
-    assert(read_input(input).state == LV_INDEV_STATE_RELEASED && volume_count == 2);
+    test_gpiod.unused |= BUTTON_SIDE2_Pin; scan(1);
+    test_gpiod.unused &= ~BUTTON_SIDE2_Pin; scan(3);
+    read_input(input); assert(!middle_clicks && !middle_longs);
+    key(&test_gpiod, BUTTON_SIDE2_Pin, true); scan(20);
+    read_input(input); assert(!middle_clicks && !middle_longs);
+    key(&test_gpiod, BUTTON_SIDE2_Pin, false);
+    assert(!middle_clicks); /* 短按在松开消抖后入队，延迟到 LVGL 读取才执行。 */
+    assert(read_input(input).enc_diff == 0 && volume_count == 2 && middle_clicks == 1);
+    key(&test_gpiod, BUTTON_SIDE2_Pin, true); scan(78);
+    read_input(input); assert(middle_longs == 0);
+    scan(1); assert(middle_longs == 0);
+    read_input(input); assert(middle_longs == 1);
+    scan(100); read_input(input); assert(middle_longs == 1);
+    key(&test_gpiod, BUTTON_SIDE2_Pin, false); read_input(input);
+    assert(middle_clicks == 1 && volume_count == 2); /* 长按松开不再触发短按。 */
     key(&test_gpiod, BUTTON_UP1_Pin, true); key(&test_gpiod, BUTTON_UP1_Pin, false);
     key(&test_gpiod, BUTTON_UP2_Pin, true); key(&test_gpiod, BUTTON_UP2_Pin, false);
     key(&test_gpiod, BUTTON_UP3_Pin, true); key(&test_gpiod, BUTTON_UP3_Pin, false);

@@ -63,7 +63,8 @@ static void music_task(void *argument)
     bool card_seen = false, usb_mode = false, usb_playing = false;
     while(1) {
         uint8_t attenuation;
-        if(playback_volume(&attenuation) && s_callbacks.volume) s_callbacks.volume(attenuation);
+        bool muted;
+        if(playback_volume(&attenuation, &muted) && s_callbacks.volume) s_callbacks.volume(attenuation, muted);
         bool active, connected = playback_usb(&active);
         if(usb_mode != connected || usb_playing != active) {
             usb_mode = connected;
@@ -195,4 +196,9 @@ void player_request(uint32_t index, bool select)
     }
     xQueueOverwrite(s_requests, &request);
     taskEXIT_CRITICAL();
+}
+
+void player_toggle_mute(void)
+{
+    playback_toggle_mute();
 }

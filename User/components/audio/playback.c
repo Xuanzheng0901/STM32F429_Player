@@ -7,6 +7,7 @@
 #include "usb_audio.h"
 #include "log.h"
 #include "es9018.h"
+#include "audio_volume.h"
 
 typedef struct {
     music_info_t info;
@@ -25,12 +26,15 @@ static uint8_t s_volume;
 static bool s_volume_pending;
 static uint8_t s_volume_applied;
 static bool s_volume_changed;
+static bool s_volume_muted;
+static bool s_mute_applied;
 
-bool playback_volume(uint8_t *attenuation)
+bool playback_volume(uint8_t *attenuation, bool *muted)
 {
     taskENTER_CRITICAL();
     bool changed = s_volume_changed;
     *attenuation = s_volume_applied;
+    *muted = s_mute_applied;
     s_volume_changed = false;
     taskEXIT_CRITICAL();
     return changed;
@@ -40,8 +44,21 @@ void playback_adjust_volume(int direction)
 {
     if(!s_audio_task) return;
     taskENTER_CRITICAL();
-    int volume = (int)s_volume - direction * 16;
-    s_volume = (uint8_t)(volume < 0 ? 0 : volume > 255 ? 255 : volume);
+    if(direction < 0 && s_volume == AUDIO_ATTENUATION_MAX) s_volume_muted = true;
+    if(direction > 0) s_volume_muted = false;
+    int volume = (int)s_volume - direction * AUDIO_VOLUME_STEP;
+    s_volume = (uint8_t)(volume < AUDIO_ATTENUATION_MIN ? AUDIO_ATTENUATION_MIN :
+                         volume > AUDIO_ATTENUATION_MAX ? AUDIO_ATTENUATION_MAX : volume);
+    s_volume_pending = true;
+    taskEXIT_CRITICAL();
+    xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
+}
+
+void playback_toggle_mute(void)
+{
+    if(!s_audio_task) return;
+    taskENTER_CRITICAL();
+    s_volume_muted = !s_volume_muted;
     s_volume_pending = true;
     taskEXIT_CRITICAL();
     xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
@@ -87,15 +104,19 @@ static void audio_task(void *argument)
         taskENTER_CRITICAL();
         bool volume_pending = s_volume_pending;
         uint8_t volume = s_volume;
+        bool muted = s_volume_muted;
         s_volume_pending = false;
         taskEXIT_CRITICAL();
         if(volume_pending) {
+            if(muted && !s_mute_applied) ES9018_set_mute(true);
             ES9018_set_volume(volume);
+            if(!muted && s_mute_applied) ES9018_set_mute(false);
             taskENTER_CRITICAL();
             s_volume_applied = volume;
+            s_mute_applied = muted;
             s_volume_changed = true;
             taskEXIT_CRITICAL();
-            LOGI("AUDIO", "volume: -%u.%u dB (reg=%u)", volume / 2U, (volume & 1U) * 5U, volume);
+            LOGI("AUDIO", "volume: -%u.%u dB (reg=%u), mute=%u", volume / 2U, (volume & 1U) * 5U, volume, muted);
         }
         bool connected = usb_audio_connected();
         if(connected != s_usb_mode) {
@@ -182,6 +203,7 @@ bool playback_init(void)
     s_volume = ES9018_get_volume();
     s_volume_pending = false;
     s_volume_changed = false;
+    s_volume_muted = s_mute_applied = false;
     s_commands = xQueueCreate(1, sizeof(audio_command_t));
     s_status = xQueueCreate(1, sizeof(audio_status_t));
     s_stop_ack = xQueueCreate(1, sizeof(uint32_t));

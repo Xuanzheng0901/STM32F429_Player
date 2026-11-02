@@ -22,7 +22,11 @@ typedef struct {
     TimerHandle_t key_timer;
     void (*control_click)(unsigned index);
     void (*volume_step)(int direction);
-    struct { uint8_t candidate, stable, count; } keys[7];
+    struct { uint8_t candidate, stable, count; } keys[8];
+    uint8_t middle_ticks;
+    bool middle_long;
+    void (*middle_click)(void);
+    void (*middle_long_press)(void);
 } lvgl_port_encoder_ctx_t;
 
 static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
@@ -39,7 +43,9 @@ static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
         else if(event <= 6) {
             if(ctx->control_click) ctx->control_click(event - 2U);
         }
-        else if(ctx->volume_step) ctx->volume_step(event == 8 ? 1 : -1);
+        else if(event <= 8 && ctx->volume_step) ctx->volume_step(event == 8 ? 1 : -1);
+        else if(event == 9 && ctx->middle_click) ctx->middle_click();
+        else if(event == 10 && ctx->middle_long_press) ctx->middle_long_press();
     }
     data->state = ctx->pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
     data->continue_reading = uxQueueMessagesWaiting(ctx->button_events) != 0;
@@ -65,13 +71,14 @@ static void encoder_rotate(void *knob, void *user_data)
 static void encoder_keys(TimerHandle_t timer)
 {
     lvgl_port_encoder_ctx_t *ctx = pvTimerGetTimerID(timer);
-    /* 0/1 为编码器确认边沿，2..6 为五个 UI 按钮，7/8 为音量减/加。中侧键预留。 */
+    /* 0/1 为编码器确认边沿，2..6 为五个 UI 按钮，7/8 为音量减/加。9/10 为中侧键短按/长按。 */
     static const struct { GPIO_TypeDef *port; uint16_t pin; uint8_t event; } pins[] = {
         {BUTTON_SIDE1_GPIO_Port, BUTTON_SIDE1_Pin, 7},
         {BUTTON_SIDE3_GPIO_Port, BUTTON_SIDE3_Pin, 8},
         {BUTTON_UP1_GPIO_Port, BUTTON_UP1_Pin, 6}, {BUTTON_UP2_GPIO_Port, BUTTON_UP2_Pin, 5},
         {BUTTON_UP3_GPIO_Port, BUTTON_UP3_Pin, 4}, {BUTTON_UP4_GPIO_Port, BUTTON_UP4_Pin, 3},
         {BUTTON_UP5_GPIO_Port, BUTTON_UP5_Pin, 2},
+        {BUTTON_SIDE2_GPIO_Port, BUTTON_SIDE2_Pin, 9},
     };
     for(unsigned i = 0; i < sizeof(pins) / sizeof(pins[0]); ++i) {
         uint8_t pressed = HAL_GPIO_ReadPin(pins[i].port, pins[i].pin) == GPIO_PIN_RESET;
@@ -82,7 +89,17 @@ static void encoder_keys(TimerHandle_t timer)
         if(ctx->keys[i].count < 3) ++ctx->keys[i].count;
         if(ctx->keys[i].count != 3 || pressed == ctx->keys[i].stable) continue;
         ctx->keys[i].stable = pressed;
+        if(i == 7) {
+            if(pressed) { ctx->middle_ticks = 0; ctx->middle_long = false; }
+            else if(!ctx->middle_long) xQueueSend(ctx->button_events, &pins[i].event, 0);
+            continue;
+        }
         if(pressed) xQueueSend(ctx->button_events, &pins[i].event, 0);
+    }
+    if(ctx->keys[7].stable && !ctx->middle_long && ++ctx->middle_ticks >= 80) {
+        ctx->middle_long = true;
+        const uint8_t event = 10;
+        xQueueSend(ctx->button_events, &event, 0);
     }
 }
 
@@ -108,6 +125,8 @@ lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *config)
     }
     ctx->control_click = config->control_click;
     ctx->volume_step = config->volume_step;
+    ctx->middle_click = config->middle_click;
+    ctx->middle_long_press = config->middle_long_press;
     lv_indev_t *indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_ENCODER);
     lv_indev_set_read_cb(indev, encoder_read);

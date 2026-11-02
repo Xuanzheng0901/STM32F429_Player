@@ -11,6 +11,7 @@
  */
 static bool sleeping = true;
 static bool base_valid;
+static bool full_requested;
 static bool analog_on;
 static uint8_t refresh_mode = SSD1685_REFRESH_MODE;
 static uint8_t previous_frame[SSD1685_BUFFER_SIZE];
@@ -153,8 +154,18 @@ void ssd1685_set_refresh_mode(uint8_t mode)
     refresh_mode = mode;
 }
 
+void ssd1685_request_full_refresh(void)
+{
+    full_requested = true;
+}
+
 void ssd1685_draw(const uint8_t *pixels, uint16_t stride)
 {
+    if(full_requested)
+    {
+        ssd1685_init();
+        full_requested = false;
+    }
     if(!base_valid)
     {
         ssd1685_write_full(pixels, stride, false);

@@ -49,10 +49,12 @@ static uint8_t volume = 90;
 static unsigned volume_writes;
 static unsigned volume_updates;
 static uint8_t displayed_volume;
-static void on_volume(uint8_t attenuation)
+static bool muted, displayed_muted;
+static void on_volume(uint8_t attenuation, bool is_muted)
 {
     assert(!critical && GetCurrentFiber() == tasks[1].fiber);
     displayed_volume = attenuation;
+    displayed_muted = is_muted;
     ++volume_updates;
 }
 uint8_t ES9018_get_volume(void) { return volume; }
@@ -61,6 +63,12 @@ void ES9018_set_volume(uint8_t value)
     assert(!critical && GetCurrentFiber() == tasks[0].fiber);
     volume = value;
     ++volume_writes;
+}
+
+void ES9018_set_mute(bool value)
+{
+    assert(!critical && GetCurrentFiber() == tasks[0].fiber);
+    muted = value;
 }
 
 void test_enter_critical(void) { ++critical; }
@@ -172,10 +180,10 @@ static void process_all(void)
 int main(int argc, char **argv)
 {
     main_fiber = ConvertThreadToFiber(NULL); assert(main_fiber);
-    player_adjust_volume(1); assert(!volume_writes); /* UI 就绪但播放器尚未初始化。 */
+    player_adjust_volume(1); player_toggle_mute(); assert(!volume_writes); /* UI 就绪但播放器尚未初始化。 */
     if(argc > 1 && !strcmp(argv[1], "headless")) {
         assert(player_init(NULL)); process_all();
-        player_adjust_volume(1); process_all(); assert(volume == 74);
+        player_adjust_volume(1); process_all(); assert(volume == 82);
         player_request(1, true); process_all(); assert(state == AUDIO_PLAYING && starts == 1);
         player_request(30, false); process_all(); assert(state == AUDIO_PLAYING && starts == 1);
         player_toggle(); process_all(); assert(state == AUDIO_PAUSED);
@@ -191,17 +199,30 @@ int main(int argc, char **argv)
     assert(!volume_updates); /* 启动不弹出音量栏。 */
     player_adjust_volume(1); player_adjust_volume(1);
     assert(volume == 90 && !volume_writes); /* 调用方不写 I2C；继承启动音量。 */
-    process_all(); assert(volume == 58 && volume_writes == 1);
-    assert(volume_updates == 1 && displayed_volume == 58);
-    player_adjust_volume(-1); process_all(); assert(volume == 74);
+    process_all(); assert(volume == 74 && volume_writes == 1);
+    assert(volume_updates == 1 && displayed_volume == 74 && !displayed_muted);
+    player_adjust_volume(-1); process_all(); assert(volume == 82);
     for(unsigned i = 0; i < 20; ++i) player_adjust_volume(1);
-    player_adjust_volume(-1); process_all(); assert(volume == 16); /* 饱和后反向仍保留顺序。 */
-    for(unsigned i = 0; i < 20; ++i) player_adjust_volume(-1);
-    process_all(); assert(volume == 255);
+    player_adjust_volume(-1); process_all(); assert(volume == 72); /* 饱和后反向仍保留顺序。 */
+    for(unsigned i = 0; i < 15; ++i) player_adjust_volume(-1);
+    process_all(); assert(volume == 192 && !muted && !displayed_muted);
     unsigned before_volume = volume_updates;
-    player_adjust_volume(-1); process_all();
-    assert(volume_updates == before_volume + 1 && displayed_volume == 255);
-    player_adjust_volume(1); process_all(); assert(volume == 239);
+    player_adjust_volume(-1); assert(!muted); process_all();
+    assert(muted && displayed_muted && volume == 192 && volume_updates == before_volume + 1);
+    player_adjust_volume(-1); process_all(); assert(muted && volume == 192);
+    player_adjust_volume(1); process_all(); assert(!muted && !displayed_muted && volume == 184);
+    player_toggle_mute(); process_all(); assert(muted && displayed_muted && volume == 184);
+    player_toggle_mute(); process_all(); assert(!muted && volume == 184);
+    player_toggle_mute(); player_adjust_volume(1); process_all();
+    assert(!muted && volume == 176); /* 静音时加音量，同时取消静音并增加一档。 */
+    player_toggle_mute(); player_adjust_volume(-1); process_all(); assert(muted && volume == 184);
+    player_toggle_mute(); player_toggle_mute(); process_all(); assert(muted && volume == 184);
+    player_adjust_volume(1); process_all(); assert(!muted && volume == 176);
+    for(unsigned i = 0; i < 20; ++i) player_adjust_volume(1);
+    process_all(); assert(volume == 64);
+    player_toggle_mute(); process_all(); assert(muted && volume == 64);
+    player_adjust_volume(1); process_all(); assert(!muted && volume == 64);
+    player_adjust_volume(-1); process_all(); assert(volume == 72);
     player_request(1, true); player_request(0, false); process_all();
     assert(selected == 1 && focused == 0 && playing && starts == 1);
     assert(selected_info.sample_rate_hz == 44100 && selected_info.duration_seconds == 90);
@@ -239,8 +260,10 @@ int main(int argc, char **argv)
     assert(usb_running && state == AUDIO_STOPPED && amp_active);
     uint8_t usb_volume = volume;
     player_adjust_volume(1); process_all();
-    assert(volume == usb_volume - 16 && usb_running && amp_active);
+    assert(volume == usb_volume - 8 && usb_running && amp_active);
     assert(displayed_volume == volume);
+    player_toggle_mute(); process_all();
+    assert(muted && displayed_muted && usb_running);
     unsigned saved_starts = starts;
     player_toggle(); player_request(2, true); player_set_repeat(true); process_all();
     assert(starts == saved_starts && usb_running);
@@ -252,7 +275,7 @@ int main(int argc, char **argv)
     card_removed = false; card_event = SDCARD_INSERTED; process_all();
     assert(usb_running && amp_active && notices_seen[PLAYER_CARD_INSERTED] == 2);
     host_connected = false; process_all();
-    assert(!usb_running && !amp_active && state == AUDIO_STOPPED);
+    assert(!usb_running && !amp_active && state == AUDIO_STOPPED && muted);
     assert(notices_seen[PLAYER_USB_DISCONNECTED] == 1 && usb_updates >= 2);
     player_toggle(); process_all(); assert(state == AUDIO_PLAYING && starts == saved_starts + 1);
     /* UI 尚未消费连接状态时完成一次接入/断开，也必须恢复 SD 选择。 */

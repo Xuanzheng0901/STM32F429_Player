@@ -252,6 +252,11 @@ int main(void)
     assert(update==0xF4 && power);
     frame[359*23+22]^=0x01; draw();
     assert(update==0x1C && power);
+    before_reset=resets; before_refresh=refreshes; before=operations;
+    ssd1685_request_full_refresh(); assert(operations==before); /* 请求本身不访问硬件。 */
+    draw(); assert(resets==before_reset+1 && refreshes==before_refresh+1 && update==0xF4);
+    before=operations; draw(); assert(operations==before);
+    frame[40*23+8]^=0x01; draw(); assert(update==0x1C); /* 全刷后恢复局刷。 */
     assert(write_received==write_size && chunk_calls>0 && tail_calls>0);
     printf("PASS mode %d: chunk reuse/boundaries/tails, immutable source, exact random-frame diff, init/BUSY, RAM/OLD sync, mode switches, sleep, padded I1\n",TEST_REFRESH_MODE);
 }

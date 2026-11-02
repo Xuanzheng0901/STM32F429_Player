@@ -28,6 +28,8 @@ static lv_indev_t *test_encoder;
 static void (*test_control_click)(unsigned);
 static void (*test_volume_step)(int);
 static int volume_steps;
+static unsigned mute_toggles, full_requests, flushes;
+static void (*test_middle_click)(void), (*test_middle_long)(void);
 static int32_t encoder_delta;
 static bool encoder_pressed;
 /* 歌曲信息现在位于右侧；只比较底栏上方 x=136..359 的整字节区域。 */
@@ -38,8 +40,9 @@ void lvgl_port_unlock(void) { assert(locked); locked = false; }
 void disp_disable_update(void) {}
 void disp_enable_update(void) {}
 void ssd1685_set_refresh_mode(uint8_t mode) { assert(mode == SSD1685_REFRESH_PARTIAL); }
+void ssd1685_request_full_refresh(void) { ++full_requests; }
 static void flush(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
-{ (void)area; (void)pixels; lv_display_flush_ready(display); }
+{ (void)area; (void)pixels; ++flushes; lv_display_flush_ready(display); }
 void lv_port_disp_init(void)
 {
     lv_init();
@@ -63,6 +66,9 @@ lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *config)
 {
     test_control_click = config->control_click;
     test_volume_step = config->volume_step;
+    test_middle_click = config->middle_click;
+    test_middle_long = config->middle_long_press;
+    assert(test_middle_click && test_middle_long);
     assert(test_control_click && test_volume_step && config->encoder_a_b && config->encoder_enter);
     lv_indev_t *encoder = lv_indev_create();
     lv_indev_set_type(encoder, LV_INDEV_TYPE_ENCODER);
@@ -74,6 +80,7 @@ lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *config)
 void player_request(uint32_t index, bool select)
 { assert(!locked); request_index = index; request_select = select; pending = true; }
 void player_toggle(void) { assert(!locked); ++toggles; }
+void player_toggle_mute(void) { assert(!locked); ++mute_toggles; }
 void player_adjust_volume(int direction) { assert(!locked); volume_steps += direction; }
 void player_set_mode(player_mode_t mode) { assert(!locked); requested_repeat = mode == PLAYER_REPEAT_ONE; requested_mode = mode; }
 
@@ -194,7 +201,7 @@ static void save_preview(const char *path, const char *mode)
     assert(UI_set_music_window(&window, 2, true));
     assert(UI_set_player_status(2, info, 84, true));
     UI_set_battery(3975, 75);
-    if(mode && !strcmp(mode, "volume")) UI_show_volume(74);
+    if(mode && !strcmp(mode, "volume")) UI_show_volume(74, false);
     lv_refr_now(NULL);
     check_bounds(lv_screen_active());
     FILE *file = fopen(path, "wb");
@@ -216,26 +223,35 @@ int main(int argc, char **argv)
     check_bounds(lv_layer_top());
     assert(lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
     save_player_pixels();
-    UI_show_volume(0); lv_refr_now(NULL);
+    UI_show_volume(64, false); lv_refr_now(NULL);
     assert(!lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
     assert(lv_obj_get_height(volume_fill) == 68 && lv_obj_get_child_count(volume_box) == 1);
     lv_tick_inc(1000); lv_timer_handler();
-    UI_show_volume(74); lv_refr_now(NULL);
-    assert(lv_obj_get_height(volume_fill) == 48);
+    UI_show_volume(74, false); lv_refr_now(NULL);
+    assert(lv_obj_get_height(volume_fill) == 62);
     lv_tick_inc(1999); lv_timer_handler();
     assert(!lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
     lv_tick_inc(1); lv_timer_handler();
     assert(lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
     check_player_pixels(); /* 隐藏后恢复底图，没有残留的覆盖层。 */
-    UI_show_volume(255);
+    UI_show_volume(192, false);
     assert(lv_obj_has_flag(volume_fill, LV_OBJ_FLAG_HIDDEN));
     lv_tick_inc(1000); lv_timer_handler();
-    UI_show_volume(255); /* 边界处继续调节同一值也重置计时。 */
+    UI_show_volume(192, false); /* 边界处继续调节同一值也重置计时。 */
     lv_tick_inc(1999); lv_timer_handler();
     assert(!lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
     lv_tick_inc(1); lv_timer_handler();
     assert(lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
     check_player_pixels();
+    UI_show_volume(128, true); lv_refr_now(NULL);
+    assert(lv_obj_has_flag(volume_fill, LV_OBJ_FLAG_HIDDEN));
+    UI_show_volume(128, false); lv_refr_now(NULL);
+    assert(!lv_obj_has_flag(volume_fill, LV_OBJ_FLAG_HIDDEN) && lv_obj_get_height(volume_fill) == 34);
+    test_middle_click(); assert(mute_toggles == 1);
+    unsigned before_flush = flushes;
+    test_middle_long(); assert(full_requests == 1 && mute_toggles == 1);
+    lv_refr_now(NULL); assert(flushes == before_flush + 1); /* 不变画面也必须提交一帧。 */
+    lv_tick_inc(2000); lv_timer_handler();
     assert(!strcmp(lv_label_get_text(battery_voltage), "--.--V"));
     assert(!strcmp(lv_label_get_text(battery_level), "--%"));
     assert(lv_obj_has_flag(battery_fill, LV_OBJ_FLAG_HIDDEN));

@@ -25,8 +25,8 @@ bool UI_set_music_error(void);
 void UI_set_media_state(player_media_t state);
 void UI_show_notice(player_notice_t notice);
 void UI_set_usb_status(bool connected, bool playing);
-/* 显示音量侧栏，最后一次更新后 2 秒隐藏；传入 ES9018 衰减寄存器值。 */
-void UI_show_volume(uint8_t attenuation);
+/* 显示音量侧栏，最后一次更新后 2 秒隐藏；传入 ES9018 衰减寄存器值，静音显示空条。 */
+void UI_show_volume(uint8_t attenuation, bool muted);
 
 /* UI_init() 后由电池任务调用，内部获取 LVGL 锁。 */
 void UI_set_battery(uint16_t millivolts, uint8_t percent);

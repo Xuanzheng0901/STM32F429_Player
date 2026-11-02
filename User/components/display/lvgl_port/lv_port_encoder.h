@@ -18,6 +18,8 @@ typedef struct {
     button_handle_t encoder_enter; // 按键句柄 (外部创建并传入)
     void (*control_click)(unsigned index); /* 上方五键，回调在 LVGL 读取输入时执行。 */
     void (*volume_step)(int direction); /* 侧键：+1 增大、-1 减小音量，在 LVGL 读取时执行。 */
+    void (*middle_click)(void);
+    void (*middle_long_press)(void); /* 中侧键按住 800 ms，松开不再触发短按。 */
 } lvgl_port_encoder_cfg_t;
 
 

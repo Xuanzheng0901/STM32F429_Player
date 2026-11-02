@@ -23,7 +23,7 @@ typedef struct {
     /* 曲库任务中每次自然结束通知一次；停止、拔卡、错误和 USB 不触发。 */
     void (*finished)(uint32_t index);
     /* 曲库任务转发音量设置事件，值为 ES9018 衰减寄存器。 */
-    void (*volume)(uint8_t attenuation);
+    void (*volume)(uint8_t attenuation, bool muted);
 } player_callbacks_t;
 
 /* UI、I2S 和 DAC 初始化后调用一次，复制通知接口并创建后台任务。 */
@@ -31,8 +31,10 @@ bool player_init(const player_callbacks_t *callbacks);
 /* 非阻塞，可在 UI 回调中调用；后续浏览不会覆盖待处理的 select 确认。 */
 void player_request(uint32_t index, bool select);
 void player_toggle(void);
-/* 不受卡状态或 USB 模式限制；每档 8 dB，+1 增大、-1 减小。 */
+/* 不受卡状态或 USB 模式限制；每档 4 dB，+1 增大、-1 减小。 */
 void player_adjust_volume(int direction);
+/* 保留衰减值并切换静音，不停止当前音源。 */
+void player_toggle_mute(void);
 /* 列表末尾回首曲；洗牌整轮不重复，手动选曲或切换模式会重建轮次。 */
 void player_set_mode(player_mode_t mode);
 /* 兼容旧接口：false 为播完停止，true 为单曲循环。 */

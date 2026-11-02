@@ -1,3 +1,4 @@
+#include "audio_volume.h"
 #include "display.h"
 #include "UI.h"
 #include "player.h"
@@ -307,10 +308,11 @@ static void volume_hide(lv_timer_t *timer)
     lv_timer_pause(timer);
 }
 
-void UI_show_volume(uint8_t attenuation)
+void UI_show_volume(uint8_t attenuation, bool muted)
 {
     lvgl_port_lock(portMAX_DELAY);
-    const int32_t height = ((255U - attenuation) * 68U + 127U) / 255U;
+    const int32_t height = muted ? 0 :
+        (AUDIO_ATTENUATION_MAX - attenuation) * 68 / (AUDIO_ATTENUATION_MAX - AUDIO_ATTENUATION_MIN);
     lv_obj_set_height(volume_fill, height);
     lv_obj_set_y(volume_fill, 1 + 68 - height);
     if(height) lv_obj_remove_flag(volume_fill, LV_OBJ_FLAG_HIDDEN);
@@ -373,6 +375,12 @@ static void ui_control_click(unsigned index)
     lv_obj_send_event(control_buttons[index], LV_EVENT_CLICKED, NULL);
 }
 
+static void ui_full_refresh(void)
+{
+    ssd1685_request_full_refresh();
+    lv_obj_invalidate(lv_screen_active());
+}
+
 static void ui_encoder_init(lv_group_t *group)
 {
     button_handle_t button = NULL;
@@ -390,6 +398,8 @@ static void ui_encoder_init(lv_group_t *group)
         .disp = lv_display_get_default(), .encoder_a_b = &knob, .encoder_enter = button,
         .control_click = ui_control_click,
         .volume_step = player_adjust_volume,
+        .middle_click = player_toggle_mute,
+        .middle_long_press = ui_full_refresh,
     };
     lv_indev_t *indev = lvgl_port_add_encoder(&config);
     if(indev)
