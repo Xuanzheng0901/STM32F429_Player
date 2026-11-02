@@ -12,6 +12,8 @@ typedef struct {
 bool playback_init(void);
 /* 每档改变衰减寄存器 16（8 dB），direction 为 +1 增大、-1 减小。 */
 void playback_adjust_volume(int direction);
+/* 消费最近一次音量设置事件；同值调节也通知，以刷新提示时长。 */
+bool playback_volume(uint8_t *attenuation);
 void playback_deinit(void);
 uint32_t playback_select(uint32_t index, const music_info_t *info, bool autoplay);
 /* 超时返回 false，调用者必须保留旧卷，不能继续卸载/重新挂载。 */

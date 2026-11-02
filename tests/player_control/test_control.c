@@ -47,6 +47,14 @@ static struct test_task tasks[2];
 static unsigned task_count;
 static uint8_t volume = 90;
 static unsigned volume_writes;
+static unsigned volume_updates;
+static uint8_t displayed_volume;
+static void on_volume(uint8_t attenuation)
+{
+    assert(!critical && GetCurrentFiber() == tasks[1].fiber);
+    displayed_volume = attenuation;
+    ++volume_updates;
+}
 uint8_t ES9018_get_volume(void) { return volume; }
 void ES9018_set_volume(uint8_t value)
 {
@@ -174,20 +182,25 @@ int main(int argc, char **argv)
         player_toggle(); process_all(); assert(state == AUDIO_PLAYING);
         goto done;
     }
-    player_callbacks_t callbacks = {.window = on_window, .playback = on_playback, .error = on_error, .notice = on_notice, .usb = on_usb, .finished = on_finished};
+    player_callbacks_t callbacks = {.window = on_window, .playback = on_playback, .error = on_error, .notice = on_notice, .usb = on_usb, .finished = on_finished, .volume = on_volume};
     assert(player_init(&callbacks));
     player_set_mode(PLAYER_PLAY_ONCE);
     memset(&callbacks, 0, sizeof(callbacks)); /* 初始化复制接口，不保留调用方栈指针。 */
     process_all();
     assert(selected == 0 && !playing && starts == 0);
+    assert(!volume_updates); /* 启动不弹出音量栏。 */
     player_adjust_volume(1); player_adjust_volume(1);
     assert(volume == 90 && !volume_writes); /* 调用方不写 I2C；继承启动音量。 */
     process_all(); assert(volume == 58 && volume_writes == 1);
+    assert(volume_updates == 1 && displayed_volume == 58);
     player_adjust_volume(-1); process_all(); assert(volume == 74);
     for(unsigned i = 0; i < 20; ++i) player_adjust_volume(1);
     player_adjust_volume(-1); process_all(); assert(volume == 16); /* 饱和后反向仍保留顺序。 */
     for(unsigned i = 0; i < 20; ++i) player_adjust_volume(-1);
     process_all(); assert(volume == 255);
+    unsigned before_volume = volume_updates;
+    player_adjust_volume(-1); process_all();
+    assert(volume_updates == before_volume + 1 && displayed_volume == 255);
     player_adjust_volume(1); process_all(); assert(volume == 239);
     player_request(1, true); player_request(0, false); process_all();
     assert(selected == 1 && focused == 0 && playing && starts == 1);
@@ -227,6 +240,7 @@ int main(int argc, char **argv)
     uint8_t usb_volume = volume;
     player_adjust_volume(1); process_all();
     assert(volume == usb_volume - 16 && usb_running && amp_active);
+    assert(displayed_volume == volume);
     unsigned saved_starts = starts;
     player_toggle(); player_request(2, true); player_set_repeat(true); process_all();
     assert(starts == saved_starts && usb_running);

@@ -18,6 +18,7 @@ void app_main(void)
         .media = UI_set_media_state,
         .notice = UI_show_notice,
         .usb = UI_set_usb_status,
+        .volume = UI_show_volume,
     };
     if(!player_init(&callbacks)) {
         LOGE("PLAYER", "task creation failed");

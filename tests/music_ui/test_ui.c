@@ -168,8 +168,9 @@ static void check_bounds(lv_obj_t *parent)
 }
 
 /* 导出实际 UI.c 绘制的 I1 帧，用于电脑端检查布局。 */
-static void save_preview(const char *path, bool expanded_font)
+static void save_preview(const char *path, const char *mode)
 {
+    bool expanded_font = mode && !strcmp(mode, "expanded");
     const char *titles[] = {"晴天", "七里香", "夜曲", "稻香", "花海"};
     if(expanded_font) {
         titles[0] = "囍喆堃祎";
@@ -193,6 +194,7 @@ static void save_preview(const char *path, bool expanded_font)
     assert(UI_set_music_window(&window, 2, true));
     assert(UI_set_player_status(2, info, 84, true));
     UI_set_battery(3975, 75);
+    if(mode && !strcmp(mode, "volume")) UI_show_volume(74);
     lv_refr_now(NULL);
     check_bounds(lv_screen_active());
     FILE *file = fopen(path, "wb");
@@ -207,10 +209,33 @@ int main(int argc, char **argv)
 {
     UI_init();
     if(argc == 2 || argc == 3) {
-        save_preview(argv[1], argc == 3);
+        save_preview(argv[1], argc == 3 ? argv[2] : NULL);
         return 0;
     }
     check_bounds(lv_screen_active());
+    check_bounds(lv_layer_top());
+    assert(lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
+    save_player_pixels();
+    UI_show_volume(0); lv_refr_now(NULL);
+    assert(!lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_get_height(volume_fill) == 68 && lv_obj_get_child_count(volume_box) == 1);
+    lv_tick_inc(1000); lv_timer_handler();
+    UI_show_volume(74); lv_refr_now(NULL);
+    assert(lv_obj_get_height(volume_fill) == 48);
+    lv_tick_inc(1999); lv_timer_handler();
+    assert(!lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
+    lv_tick_inc(1); lv_timer_handler();
+    assert(lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
+    check_player_pixels(); /* 隐藏后恢复底图，没有残留的覆盖层。 */
+    UI_show_volume(255);
+    assert(lv_obj_has_flag(volume_fill, LV_OBJ_FLAG_HIDDEN));
+    lv_tick_inc(1000); lv_timer_handler();
+    UI_show_volume(255); /* 边界处继续调节同一值也重置计时。 */
+    lv_tick_inc(1999); lv_timer_handler();
+    assert(!lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
+    lv_tick_inc(1); lv_timer_handler();
+    assert(lv_obj_has_flag(volume_box, LV_OBJ_FLAG_HIDDEN));
+    check_player_pixels();
     assert(!strcmp(lv_label_get_text(battery_voltage), "--.--V"));
     assert(!strcmp(lv_label_get_text(battery_level), "--%"));
     assert(lv_obj_has_flag(battery_fill, LV_OBJ_FLAG_HIDDEN));

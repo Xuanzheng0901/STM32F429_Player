@@ -62,6 +62,8 @@ static void music_task(void *argument)
     audio_status_t status;
     bool card_seen = false, usb_mode = false, usb_playing = false;
     while(1) {
+        uint8_t attenuation;
+        if(playback_volume(&attenuation) && s_callbacks.volume) s_callbacks.volume(attenuation);
         bool active, connected = playback_usb(&active);
         if(usb_mode != connected || usb_playing != active) {
             usb_mode = connected;

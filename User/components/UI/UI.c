@@ -38,6 +38,8 @@ static bool playing;
 static bool usb_mode, usb_playing;
 static lv_obj_t *notice_box, *notice_label;
 static lv_timer_t *notice_timer;
+static lv_obj_t *volume_box, *volume_fill;
+static lv_timer_t *volume_timer;
 static player_notice_t notices[8];
 static unsigned notice_read, notice_write;
 static const char *const notice_text[] = {
@@ -299,6 +301,26 @@ void UI_set_battery(uint16_t millivolts, uint8_t percent)
     lvgl_port_unlock();
 }
 
+static void volume_hide(lv_timer_t *timer)
+{
+    lv_obj_add_flag(volume_box, LV_OBJ_FLAG_HIDDEN);
+    lv_timer_pause(timer);
+}
+
+void UI_show_volume(uint8_t attenuation)
+{
+    lvgl_port_lock(portMAX_DELAY);
+    const int32_t height = ((255U - attenuation) * 68U + 127U) / 255U;
+    lv_obj_set_height(volume_fill, height);
+    lv_obj_set_y(volume_fill, 1 + 68 - height);
+    if(height) lv_obj_remove_flag(volume_fill, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(volume_fill, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(volume_box, LV_OBJ_FLAG_HIDDEN);
+    lv_timer_reset(volume_timer);
+    lv_timer_resume(volume_timer);
+    lvgl_port_unlock();
+}
+
 static void ui_action(lv_event_t *event)
 {
     const uintptr_t action = (uintptr_t)lv_event_get_user_data(event);
@@ -474,6 +496,14 @@ void UI_init(void)
         }
         lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
     }
+    /* 右侧留白内的临时音量条，按衰减寄存器反向映射高度。 */
+    volume_box = ui_block(lv_layer_top(), 350, 54, 8, 72, true);
+    lv_obj_set_style_border_width(volume_box, 1, 0);
+    lv_obj_set_style_border_color(volume_box, lv_color_black(), 0);
+    volume_fill = ui_block(volume_box, 1, 1, 4, 68, false);
+    lv_obj_add_flag(volume_box, LV_OBJ_FLAG_HIDDEN);
+    volume_timer = lv_timer_create(volume_hide, 2000, NULL);
+    lv_timer_pause(volume_timer);
     /* 复用弹窗对象和 LVGL 定时器，连续事件依次显示三秒。 */
     notice_box = ui_block(lv_layer_top(), 60, 66, 240, 52, true);
     lv_obj_set_style_border_width(notice_box, 2, 0);

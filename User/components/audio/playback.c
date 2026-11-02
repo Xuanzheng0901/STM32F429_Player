@@ -23,6 +23,18 @@ static player_notice_t s_notices[8];
 static unsigned s_notice_read, s_notice_write;
 static uint8_t s_volume;
 static bool s_volume_pending;
+static uint8_t s_volume_applied;
+static bool s_volume_changed;
+
+bool playback_volume(uint8_t *attenuation)
+{
+    taskENTER_CRITICAL();
+    bool changed = s_volume_changed;
+    *attenuation = s_volume_applied;
+    s_volume_changed = false;
+    taskEXIT_CRITICAL();
+    return changed;
+}
 
 void playback_adjust_volume(int direction)
 {
@@ -79,6 +91,10 @@ static void audio_task(void *argument)
         taskEXIT_CRITICAL();
         if(volume_pending) {
             ES9018_set_volume(volume);
+            taskENTER_CRITICAL();
+            s_volume_applied = volume;
+            s_volume_changed = true;
+            taskEXIT_CRITICAL();
             LOGI("AUDIO", "volume: -%u.%u dB (reg=%u)", volume / 2U, (volume & 1U) * 5U, volume);
         }
         bool connected = usb_audio_connected();
@@ -165,6 +181,7 @@ bool playback_init(void)
 {
     s_volume = ES9018_get_volume();
     s_volume_pending = false;
+    s_volume_changed = false;
     s_commands = xQueueCreate(1, sizeof(audio_command_t));
     s_status = xQueueCreate(1, sizeof(audio_status_t));
     s_stop_ack = xQueueCreate(1, sizeof(uint32_t));

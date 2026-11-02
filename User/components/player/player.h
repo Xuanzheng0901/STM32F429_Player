@@ -22,6 +22,8 @@ typedef struct {
     void (*usb)(bool connected, bool playing);
     /* 曲库任务中每次自然结束通知一次；停止、拔卡、错误和 USB 不触发。 */
     void (*finished)(uint32_t index);
+    /* 曲库任务转发音量设置事件，值为 ES9018 衰减寄存器。 */
+    void (*volume)(uint8_t attenuation);
 } player_callbacks_t;
 
 /* UI、I2S 和 DAC 初始化后调用一次，复制通知接口并创建后台任务。 */

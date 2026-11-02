@@ -52,9 +52,9 @@ player/music_library.c 负责递归扫描、隐藏索引和 15 首窗口，playe
 
 | 配置 | SRAM | CCMRAM（LVGL＋RTOS） | Flash 地址跨度 |
 | --- | ---: | ---: | ---: |
-| Debug | 187,544 B | 24+40 KiB | 924,268 B |
-| Release | 187,544 B | 24+40 KiB | 861,980 B |
-| Optimized | 187,544 B | 24+40 KiB | 874,216 B |
+| Debug | 187,560 B | 24+40 KiB | 924,788 B |
+| Release | 187,560 B | 24+40 KiB | 862,360 B |
+| Optimized | 187,560 B | 24+40 KiB | 874,596 B |
 
 Flash 数值来自实际 LOAD 段地址范围，含 4 字节段间对齐，不包含 BSS 或 CCMRAM 堆。
 
@@ -70,7 +70,7 @@ FreeRTOS 动态堆中的长期任务栈合计 29 KiB，包含 audio 8 KiB、LVGL
 
 UI 对插拔 SD 卡、USB 主机连接/断开、耳机插拔依次显示三秒提示。USB 收到主机复位或 SOF 时独占 I2S2，固定 96 kHz/32 位整数 PCM 双声道；连续 500 ms 无总线活动退出，主机挂起也按断开处理。SD 卡可在 USB 模式继续挂载/卸载，不能抢占音频输出；退出 USB 后选曲保持暂停。PB14 低电平插入，PD9 低电平静音，拔出由 EXTI14 立即静音，插入消抖 30 ms。实现和缓冲策略见 [音频输出说明](audio/README.md)。
 
-USB 模块未增加 RTOS 动态分配。USB FIFO 为 16384 B、DMA 为 6144 B，均在普通 SRAM；ST USB 类接收缓冲为单个最大包 776 B。96k/32b 相比原 48k/16b 额外占用约 12.5 KiB SRAM，Release 链接后普通 SRAM 余量 9064 B。
+USB 模块未增加 RTOS 动态分配。USB FIFO 为 16384 B、DMA 为 6144 B，均在普通 SRAM；ST USB 类接收缓冲为单个最大包 776 B。96k/32b 相比原 48k/16b 额外占用约 12.5 KiB SRAM，Release 链接后普通 SRAM 余量 9048 B。
 
 模块边界：UI → player → audio/playback → audio_player → decoder/file_decoder → FatFs；USB 直接向 audio/usb_audio 写 PCM。解码层不依赖音频硬件，player 不直接接触 DMA 或播放中的 FIL。
 
@@ -80,6 +80,8 @@ USB 模块未增加 RTOS 动态分配。USB FIFO 为 16384 B、DMA 为 6144 B，
 实体编码器 TIM3/PB3 负责浏览和确认，已删除侧键模拟编码器的代码。侧边 SIDE1（下）
 减小音量、SIDE3（上）增大音量，每次寄存器变化 16（实际 8 dB），SIDE2（中）预留。
 音量继承启动值，在 0～255 限幅；SD/USB 共用，I2C 写入统一由音频任务执行。
+完成音量设置后由曲库任务通知 UI，右侧留白显示无文字音量条，最后一次调节后 2 秒
+隐藏；连按重置计时，不新增 RTOS 队列或任务。
 输入映射和定时器见 [输入说明](display/README.md)。
 
 曲库索引在建库后持续只读打开，卸载时关闭。翻页直接读取缓存的路径与标签，不再对 15 首音乐逐一打开、查目录和跳转解析标签；FatFs 锁超时会记录持锁任务及持续时间。
