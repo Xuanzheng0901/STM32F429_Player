@@ -66,7 +66,7 @@ static FRESULT scan_directory(FIL *index, music_info_t *item, unsigned depth, ui
         size_t start = parent_length;
         if(path[start - 1] != '/') ++start;
         if(start + name_length >= PATH_CAPACITY || (is_directory && depth == SCAN_MAX_DEPTH)) {
-            LOGW("SD", "skip: path or directory depth limit");
+            LOGD("SD", "skip: path or directory depth limit");
             continue;
         }
         if(start != parent_length) path[parent_length] = '/';
