@@ -42,7 +42,8 @@ bool playback_volume(uint8_t *attenuation, bool *muted)
 
 void playback_adjust_volume(int direction)
 {
-    if(!s_audio_task) return;
+    if(!s_audio_task)
+        return;
     taskENTER_CRITICAL();
     if(direction < 0 && s_volume == AUDIO_ATTENUATION_MAX) s_volume_muted = true;
     if(direction > 0) s_volume_muted = false;
@@ -68,7 +69,8 @@ void playback_toggle_mute(void)
 static void post_notice(player_notice_t notice)
 {
     taskENTER_CRITICAL();
-    if(s_notice_write - s_notice_read == 8U) ++s_notice_read;
+    if(s_notice_write - s_notice_read == 8U)
+        ++s_notice_read;
     s_notices[s_notice_write++ % 8U] = notice;
     taskEXIT_CRITICAL();
 }
@@ -99,7 +101,8 @@ static void audio_task(void *argument)
     uint32_t last_elapsed = UINT32_MAX;
     audio_state_t last_state = AUDIO_STOPPED;
     audio_output_init();
-    while(1) {
+    while(1)
+    {
         /* 所有音量 I2C 写入都在音频任务完成，SD/USB 共用，并继承启动设置。 */
         taskENTER_CRITICAL();
         bool volume_pending = s_volume_pending;
@@ -107,7 +110,8 @@ static void audio_task(void *argument)
         bool muted = s_volume_muted;
         s_volume_pending = false;
         taskEXIT_CRITICAL();
-        if(volume_pending) {
+        if(volume_pending)
+        {
             if(muted && !s_mute_applied) ES9018_set_mute(true);
             ES9018_set_volume(volume);
             if(!muted && s_mute_applied) ES9018_set_mute(false);
@@ -119,7 +123,8 @@ static void audio_task(void *argument)
             LOGI("AUDIO", "volume: -%u.%u dB (reg=%u), mute=%u", volume / 2U, (volume & 1U) * 5U, volume, muted);
         }
         bool connected = usb_audio_connected();
-        if(connected != s_usb_mode) {
+        if(connected != s_usb_mode)
+        {
             audio_output_set_active(false);
             audio_player_stop();
             usb_audio_stop();
@@ -130,19 +135,25 @@ static void audio_task(void *argument)
             post_notice(connected ? PLAYER_USB_CONNECTED : PLAYER_USB_DISCONNECTED);
         }
         int ear = audio_output_poll();
-        if(ear >= 0) post_notice(ear ? PLAYER_EAR_INSERTED : PLAYER_EAR_REMOVED);
-        if(!s_usb_mode) audio_player_poll(0);
+        if(ear >= 0)
+            post_notice(ear ? PLAYER_EAR_INSERTED : PLAYER_EAR_REMOVED);
+        if(!s_usb_mode)
+            audio_player_poll(0);
         /* 拔卡立即停止；即使暂停，也会周期读取卡状态。 */
-        if(selected && sdcard_is_removed()) {
+        if(selected && sdcard_is_removed())
+        {
             audio_output_set_active(false);
             audio_player_stop();
             selected = false;
         }
         bool changed = false, start = false, pause_after_start = false;
         /* 合并控制命令，浏览不接触正在播放的曲目副本。 */
-        if(xQueueReceive(s_commands, &command, 0) == pdTRUE) {
-            if(command.stop) {
-                if(!s_usb_mode) {
+        if(xQueueReceive(s_commands, &command, 0) == pdTRUE)
+        {
+            if(command.stop)
+            {
+                if(!s_usb_mode)
+                {
                     audio_output_set_active(false);
                     audio_player_stop();
                 }
@@ -150,10 +161,12 @@ static void audio_task(void *argument)
                 xQueueOverwrite(s_stop_ack, &command.serial);
                 continue;
             }
-            if(s_usb_mode || sdcard_is_removed()) goto output;
+            if(s_usb_mode || sdcard_is_removed())
+                goto output;
             changed = status.serial != command.serial;
             status.serial = command.serial;
-            if(command.select) {
+            if(command.select)
+            {
                 audio_output_set_active(false);
                 audio_player_stop();
                 status.info = command.info;
@@ -161,31 +174,40 @@ static void audio_task(void *argument)
                 selected = changed = true;
                 start = command.autoplay;
             }
-            if(command.toggle && selected) {
+            if(command.toggle && selected)
+            {
                 audio_state_t state = audio_player_state();
-                if(start) pause_after_start = true;
-                else if(state == AUDIO_PLAYING || state == AUDIO_PAUSED) audio_player_toggle();
-                else start = true;
+                if(start)
+                    pause_after_start = true;
+                else if(state == AUDIO_PLAYING || state == AUDIO_PAUSED)
+                    audio_player_toggle();
+                else
+                    start = true;
                 changed = true;
             }
         }
         /* 统一处理起播和重播，后续格式解码也从这里分派。 */
-        if(start) {
+        if(start)
+        {
             audio_output_set_active(false);
             audio_player_start(&status.info);
-            if(pause_after_start && audio_player_state() == AUDIO_PLAYING) audio_player_toggle();
+            if(pause_after_start && audio_player_state() == AUDIO_PLAYING)
+                audio_player_toggle();
         }
         /* 只投递状态，由曲库任务通知界面，避免屏幕刷新阻塞音频。 */
         status.state = audio_player_state();
         status.elapsed = status.state == AUDIO_STOPPED ? 0 : audio_player_elapsed();
-        if(selected && (changed || status.state != last_state || status.elapsed != last_elapsed)) {
+        if(selected && (changed || status.state != last_state || status.elapsed != last_elapsed))
+        {
             xQueueOverwrite(s_status, &status);
             last_state = status.state;
             last_elapsed = status.elapsed;
         }
-output:
-        if(s_usb_mode) {
-            if(!usb_audio_running()) usb_audio_start();
+    output:
+        if(s_usb_mode)
+        {
+            if(!usb_audio_running())
+                usb_audio_start();
             usb_audio_poll(pdMS_TO_TICKS(20));
             s_usb_playing = usb_audio_audible();
             audio_output_set_active(s_usb_playing);
@@ -208,17 +230,22 @@ bool playback_init(void)
     s_status = xQueueCreate(1, sizeof(audio_status_t));
     s_stop_ack = xQueueCreate(1, sizeof(uint32_t));
     if(s_commands && s_status && s_stop_ack &&
-       xTaskCreate(audio_task, "audio", 2048, NULL, 7, &s_audio_task) == pdPASS) return true;
+       xTaskCreate(audio_task, "audio", 2048, NULL, 7, &s_audio_task) == pdPASS)
+        return true;
     playback_deinit();
     return false;
 }
 
 void playback_deinit(void)
 {
-    if(s_audio_task) vTaskDelete(s_audio_task);
-    if(s_commands) vQueueDelete(s_commands);
-    if(s_status) vQueueDelete(s_status);
-    if(s_stop_ack) vQueueDelete(s_stop_ack);
+    if(s_audio_task)
+        vTaskDelete(s_audio_task);
+    if(s_commands)
+        vQueueDelete(s_commands);
+    if(s_status)
+        vQueueDelete(s_status);
+    if(s_stop_ack)
+        vQueueDelete(s_stop_ack);
     s_audio_task = NULL;
     s_commands = s_status = s_stop_ack = NULL;
 }
@@ -233,33 +260,47 @@ bool playback_stop(void)
     xTaskNotify(s_audio_task, AUDIO_CONTROL_EVENT, eSetBits);
     TickType_t started = xTaskGetTickCount(), timeout = pdMS_TO_TICKS(2000);
     uint32_t acknowledged;
-    while(xQueueReceive(s_stop_ack, &acknowledged, timeout) == pdTRUE) {
-        if(acknowledged == command.serial) {
+    while(xQueueReceive(s_stop_ack, &acknowledged, timeout) == pdTRUE)
+    {
+        if(acknowledged == command.serial)
+        {
             xQueueReset(s_status);
             return true;
         }
         TickType_t elapsed = xTaskGetTickCount() - started;
-        if(elapsed >= pdMS_TO_TICKS(2000)) break;
+        if(elapsed >= pdMS_TO_TICKS(2000))
+            break;
         timeout = pdMS_TO_TICKS(2000) - elapsed;
     }
     LOGE("PLAYER", "audio stop acknowledgement timeout");
     return false;
 }
 
-bool playback_status(audio_status_t *status) { return xQueueReceive(s_status, status, 0) == pdTRUE; }
-bool playback_usb(bool *playing) { *playing = s_usb_playing; return s_usb_mode; }
+bool playback_status(audio_status_t *status)
+{
+    return xQueueReceive(s_status, status, 0) == pdTRUE;
+}
+
+bool playback_usb(bool *playing)
+{
+    *playing = s_usb_playing;
+    return s_usb_mode;
+}
+
 bool playback_notice(player_notice_t *notice)
 {
     taskENTER_CRITICAL();
     bool pending = s_notice_read != s_notice_write;
-    if(pending) *notice = s_notices[s_notice_read++ % 8U];
+    if(pending)
+        *notice = s_notices[s_notice_read++ % 8U];
     taskEXIT_CRITICAL();
     return pending;
 }
 
 uint32_t playback_toggle(void)
 {
-    if(usb_audio_connected()) return 0;
+    if(usb_audio_connected())
+        return 0;
     audio_command_t command = {0};
     taskENTER_CRITICAL();
     xQueuePeek(s_commands, &command, 0);

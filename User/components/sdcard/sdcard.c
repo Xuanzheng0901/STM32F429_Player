@@ -10,13 +10,16 @@ static unsigned s_insert_samples;
 
 sdcard_event_t sdcard_poll(void)
 {
-    if(sdmmc_poll_removal()) {
+    if(sdmmc_poll_removal())
+    {
         s_inserted = false;
         s_insert_samples = 0;
         return SDCARD_REMOVED;
     }
-    if(!sdmmc_detected()) s_insert_samples = 0;
-    else if(!s_inserted && ++s_insert_samples == 3) {
+    if(!sdmmc_detected())
+        s_insert_samples = 0;
+    else if(!s_inserted && ++s_insert_samples == 3)
+    {
         s_inserted = true;
         return SDCARD_INSERTED;
     }
@@ -42,18 +45,21 @@ FRESULT sdcard_mount_and_scan(void)
     sdmmc_new_session();
     FRESULT result = f_mount(&s_filesystem, "0:", 1);
     LOGI("SD", "mount result: FatFs=%d", (int)result);
-    if(result == FR_OK) {
+    if(result == FR_OK)
+    {
         LOGI("SD", "rebuilding library");
         result = music_library_rebuild(&s_total);
     }
     s_ready = result == FR_OK;
-    if(!s_ready) sdcard_unmount();
+    if(!s_ready)
+        sdcard_unmount();
     return result;
 }
 
 FRESULT sdcard_load_music_window(uint32_t center, music_window_t *window)
 {
-    if(s_ready && !sdcard_is_removed()) return music_library_load(s_total, center, window);
+    if(s_ready && !sdcard_is_removed())
+        return music_library_load(s_total, center, window);
     window->count = 0;
     window->first_index = window->total = 0;
     return FR_NOT_READY;
