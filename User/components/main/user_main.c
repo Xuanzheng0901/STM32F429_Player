@@ -10,7 +10,7 @@ void app_main(void)
     log_init(LOG_INFO);
     UI_init();
     ES9018_init();
-    ES9018_set_volume(70);
+    ES9018_set_volume(88);
     const player_callbacks_t callbacks = {
         .window = UI_set_music_window,
         .playback = UI_set_player_status,
