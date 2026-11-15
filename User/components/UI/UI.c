@@ -507,7 +507,7 @@ void UI_init(void)
         lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
     }
     /* 右侧留白内的临时音量条，按衰减寄存器反向映射高度。 */
-    volume_box = ui_block(lv_layer_top(), 350, 54, 8, 72, true);
+    volume_box = ui_block(lv_layer_top(), 330, 54, 8, 72, true);
     lv_obj_set_style_border_width(volume_box, 1, 0);
     lv_obj_set_style_border_color(volume_box, lv_color_black(), 0);
     volume_fill = ui_block(volume_box, 1, 1, 4, 68, false);
