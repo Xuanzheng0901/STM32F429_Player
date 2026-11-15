@@ -4,7 +4,7 @@
 #include "task.h"
 #include "log.h"
 
-#define BATTERY_PERIOD_MS 30000U
+#define BATTERY_PERIOD_MS 5000U
 #define BATTERY_REFERENCE_MV 3300U
 #define BATTERY_SAMPLES 16U
 #define BATTERY_STACK_WORDS 512U

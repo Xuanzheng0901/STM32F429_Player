@@ -41,7 +41,7 @@ TaskHandle_t xTaskCreateStatic(void (*task)(void *), const char *name, uint32_t 
 }
 void vTaskDelayUntil(TickType_t *wake, TickType_t period)
 {
-    assert(period == 30000 && *wake == 123 + cycle * period);
+    assert(period == 5000 && *wake == 123 + cycle * period);
     *wake += period;
     if(cycle == 0) {
         assert(notices == 1 && last_mv == 4000 && last_percent == 79);
@@ -77,5 +77,5 @@ int main(void)
     assert(battery_init(publish));
     if(!setjmp(done)) entry(NULL);
     assert(starts == stops && warnings == 1);
-    puts("PASS: voltage conversion, averaging, OCV interpolation, ADC errors and 30s task recovery");
+    puts("PASS: voltage conversion, averaging, OCV interpolation, ADC errors and 5s task recovery");
 }

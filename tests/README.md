@@ -25,7 +25,7 @@ Windows 使用 MinGW GCC。先把编译器 bin 目录加入当前进程 PATH；�
 | display_port | 5 | 全刷/快刷/局刷、编码器回绕、日志 |
 | audio_io | 6 | UAC1 96k/32b 描述符及 776 B 端点、95/96/97 帧包、32 位低位及 I2S 半字顺序、满幅插值、缓存欠载/溢出/恢复、400 秒模拟漂移、转换中重启 USB 流、DMA/DAC 故障、接口 alt 切换与静音请求、耳机消抖和拔出中断静音 |
 | heap_budget | 1 | 40 KiB RTOS 堆启动峰值、swdraw 线程、Idle 回收前挂载与反复重挂载 |
-| battery | 1 | ADC 平均/二分之一分压还原、OCV 节点及单调性、30 秒周期、采样失败后恢复；UI 套件另验证电压/百分比/填充条 |
+| battery | 1 | ADC 平均/二分之一分压还原、OCV 节点及单调性、5 秒周期、采样失败后恢复；UI 套件另验证电压/百分比/填充条 |
 
 UI 测试按新布局检查左侧高亮边缘、浏览时右侧播放器像素不变及控件边界。64 位主机使用 32 KiB LVGL 堆，固件保持 24 KiB。需要检查实际绘制结果时，运行 `build/ui-tests/music_ui.exe build/ui-tests/layout.pbm`，可导出 360×184 的黑白预览。
 
