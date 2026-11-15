@@ -127,7 +127,7 @@ if(lvgl_port_lock(portMAX_DELAY))
 方向单独累加。扫描回调不操作 UI 或 I2C；LVGL 读取时调用 `control_click` 或
 `volume_step`，前者触发原控件事件，后者经 player → playback 交给音频任务处理。
 
-旋钮使用有符号 16 位差值处理硬件计数回绕。输入设备通过 lv_indev_set_group 绑定
+旋钮使用有符号 16 位差值处理硬件计数回绕。按当前接线，默认方向将 TIM3 计数减小映射为软件位置增加，`default_direction=1` 时反向。输入设备通过 lv_indev_set_group 绑定
 界面 group，删除使用 lvgl_port_remove_encoder；外部创建的 PB3 按键仍由调用者释放。
 RTOS 扫描定时器现在为三个：旋钮、确认键、其余控制键；没有新增任务或队列。
 

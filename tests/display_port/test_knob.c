@@ -30,8 +30,8 @@ int main(void)
     knob_handle_t knob = iot_knob_create(&config);
     assert(knob && hardware.running);
     move(&hardware, -4);
-    assert(iot_knob_get_count_value(knob) == -1);
-    assert(iot_knob_get_event(knob) == KNOB_LEFT);
+    assert(iot_knob_get_count_value(knob) == 1);
+    assert(iot_knob_get_event(knob) == KNOB_RIGHT);
     move(&hardware, 4);
     assert(iot_knob_get_count_value(knob) == 0);
     assert(iot_knob_get_event(knob) == KNOB_ZERO);
@@ -39,26 +39,26 @@ int main(void)
     move(&hardware, 2);
     assert(iot_knob_get_count_value(knob) == 0);
     move(&hardware, 1);
-    assert(iot_knob_get_count_value(knob) == 1);
+    assert(iot_knob_get_count_value(knob) == -1);
     move(&hardware, -1);
     move(&hardware, -3);
     assert(iot_knob_get_count_value(knob) == 0);
     for(unsigned i = 0; i < 70000; i++) move(&hardware, 4);
-    assert(iot_knob_get_count_value(knob) == 70000);
+    assert(iot_knob_get_count_value(knob) == -70000);
     assert(iot_knob_delete(knob) == 0 && !hardware.running);
 
     hardware.counter = 65532;
     knob = iot_knob_create(&config);
     move(&hardware, 4);
-    assert(iot_knob_get_count_value(knob) == 1);
+    assert(iot_knob_get_count_value(knob) == -1);
     assert(iot_knob_delete(knob) == 0);
 
     config.default_direction = 1;
     knob = iot_knob_create(&config);
     move(&hardware, 4);
-    assert(iot_knob_get_count_value(knob) == -1);
-    move(&hardware, -8);
     assert(iot_knob_get_count_value(knob) == 1);
+    move(&hardware, -8);
+    assert(iot_knob_get_count_value(knob) == -1);
     assert(iot_knob_delete(knob) == 0);
     puts("TIM3 wrap, reverse, detents and signed position passed");
 }

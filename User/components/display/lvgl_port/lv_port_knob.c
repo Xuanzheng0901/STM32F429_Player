@@ -130,7 +130,7 @@ static void knob_handler(knob_dev_t *knob)
 
         knob->last_hw_counter += (steps * KNOB_ECODER_RESOLUTION);
 
-        int32_t delta = knob->default_direction ? -steps : steps;
+        int32_t delta = knob->default_direction ? steps : -steps;
         int64_t position = (int64_t)knob->count_value + delta;
         knob->count_value = position > HIGH_LIMIT ? HIGH_LIMIT :
                             position < LOW_LIMIT ? LOW_LIMIT : (int32_t)position;
