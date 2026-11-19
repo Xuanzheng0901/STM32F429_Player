@@ -29,7 +29,7 @@ disk_ioctl 支持 CTRL_SYNC、GET_SECTOR_COUNT、GET_SECTOR_SIZE、GET_BLOCK_SIZ
 
 CubeMX FatFs 保持关闭；Core/Src/sdio.c 只填写句柄配置，实际卡初始化由任务中的 f_mount 发起。重新生成外设代码时，仍需保证启动阶段不调用 HAL_SD_Init 或 HAL_SD_ConfigWideBusOperation 进入无卡错误死循环。
 
-应用已接入正常启动入口，无需强制保留符号来验证链接。构建及资源占用见 [应用说明](../README.md)，主机验证见 [文件模块测试](../../../tests/fatfs_port/README.md)。
+构建见 [项目简介](../../../README.md)，内存布局见 [外设配置](../../../PERIPHERALS.md)，主机验证见 [文件模块测试](../../../tests/fatfs_port/README.md)。
 
 ## SDIO 块设备
 

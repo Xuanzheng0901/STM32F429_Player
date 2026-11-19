@@ -11,7 +11,7 @@ player.c 接收 UI 的浏览、选曲、暂停和循环命令，管理曲库任�
 
 启动和重新插卡只选第一首，USB 退出后从当前曲库窗口选一首，均保持暂停。挂载失败提示错误，下次插卡重试。连接、耳机等音频事件由 playback_notice 读取，在曲库任务中转发给 UI；短暂连接/断开不会因状态合并漏掉 SD 选曲恢复。
 
-文件解码见 [decoder](../decoder/README.md)，音频任务与硬件输出见 [audio](../audio/README.md)。构建和测试见 [应用说明](../README.md) 与 [主机验证](../../../tests/README.md)。
+文件解码见 [decoder](../decoder/README.md)，音频任务与硬件输出见 [audio](../audio/README.md)。构建和测试见 [项目简介](../../../README.md) 与 [主机验证](../../../tests/README.md)。
 
 播放完成与模式：player_callbacks_t.finished(index) 在曲库任务中每次自然 EOF 通知一次。停止、拔卡、解码错误和 USB 不触发；回调可用 player_request 显式选曲，该请求优先于自动切歌。选曲/播放控制编号会过滤过期状态，避免旧曲 EOF 覆盖新选曲。
 
